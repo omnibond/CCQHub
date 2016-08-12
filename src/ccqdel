@@ -1,0 +1,371 @@
+#!/usr/bin/python2.7
+#Copyright Omnibond Systems, LLC. All rights reserved.
+
+# This file is part of OpenCCQ.
+
+# OpenCCQ is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# OpenCCQ is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public License
+# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import sys
+import json
+import urllib2
+import getpass
+import os
+import base64
+from datetime import datetime
+
+ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
+ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
+
+def ccqdel():
+    parser = argparse.ArgumentParser(description="A utility that allows you to delete/kill jobs that have been submitted using the ccqsub command.")
+    parser.add_argument('-V', '--version', action='version', version='ccqdel (version 0.2)')
+    parser.add_argument('-j', '-j', help="The job Id of the job you want to delete/kill.", required=True)
+    parser.add_argument('-f', '--f', action='store_true', help="Force kill/purge the job from the Scheduler.")
+    parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline!", default="1")
+    args = parser.parse_args()
+
+    jobId = args.j
+    jobForceDelete = args.f
+    certLength = args.cl
+
+    jobInformation = {}
+
+    isCert = False
+
+    try:
+        configFile = open(ccqsubConfigFileLocation, 'r')
+        for line in configFile:
+            line = line.replace(" ", "")
+            splitLine = line.split('=')
+            if splitLine[0] == "certLength":
+                parsedCommand = splitLine[1]
+                certLength = parsedCommand[:len(parsedCommand)-1]
+    except IOError as e:
+        pass
+
+    try:
+        tempcertLength = int(certLength)
+        if tempcertLength < 0:
+            print "Invalid certificate valid length! The number of days valid must be a valid integer greater than or equal to 0."
+            sys.exit(0)
+    except:
+        print "Invalid certificate valid length! The number of days valid must be a valid integer greater than or equal to 0."
+        sys.exit(0)
+
+    try:
+        import ccqsubMethods
+        #Running on a CC AMI now we will save out the job information to the DB and pass the job off to the scheduler
+        #for processing and scaling.
+
+        validUser = False
+        attempts = 0
+        userName = ""
+        password = ""
+        valKey = "unpw"
+
+        validCertFound = False
+        isCert = False
+
+        values = ccqsubMethods.getSchedulerAndSchedTypeFromJob(jobId)
+        if values['status'] != "success":
+            print values['payload']
+            sys.exit(0)
+        else:
+            schedulerIpAddress = values['payload']
+
+        if os.path.isfile(ccqsubCertDefaultFileLocation) and int(certLength) != 0:
+            print "Checking the expiration date of the ccq certificate......."
+            values = extractFieldsFromCert()
+            if values['status'] == "success":
+                valuesExtracted = values['payload']
+                successfulCheck = checkCertExpired(valuesExtracted['dateExpires'])
+                if successfulCheck['status'] == "success":
+                    userName = values['payload']['userName']
+                    password = values['payload']['password']
+                    valKey = values['payload']['valKey']
+                    validCertFound = True
+
+                    print "Certificate is still before expiration date, sending for server validation!"
+                    url = "https://" + str(schedulerIpAddress) + "/srv/validateccqcreds"
+                    final = {"userName": str(userName), "password": str(password), "valKey": str(valKey), "dateExpires": valuesExtracted['dateExpires']}
+                    data = json.dumps(final)
+                    headers = {'Content-Type': "application/json"}
+                    req = urllib2.Request(url, data, headers)
+                    try:
+                        res = urllib2.urlopen(req).read().decode('utf-8')
+                        res = json.loads(res)
+                        if res['status'] == "success":
+                            print "Successfully validated the ccq certificate!"
+                            validUser = True
+                            isCert = True
+                        else:
+                            print res['payload']
+                            print "The ccq certificate file may have been tampered with! Please re-authenticate with ccq in order to receive a new certificate!"
+                            validCertFound = False
+                    except Exception as ex:
+                        print "There was an issue validating the ccq certificate from the Server!"
+                        print str(ex)
+                else:
+                    validCertFound = False
+                    print successfulCheck['payload']
+            else:
+                print "Unable to read values from the ccq certificate file. Reverting to username/password for authentication!"
+
+        if not validCertFound or not validUser:
+            while not validUser and attempts < 5:
+                userName = raw_input("Please enter your username: \n")
+                password = getpass.getpass("Please enter your password: \n")
+
+                values = ccqsubMethods.checkUserNamePassword(userName, password)
+                if values['status'] != 'success':
+                    print values['payload']
+                    attempts += 1
+                    if attempts >= 5:
+                        print "Maximum number of user/password combinations reached! Please try again with a valid username/password combination."
+                        sys.exit(0)
+                else:
+                    print values['payload']
+                    if int(certLength) == 0 and not validCertFound:
+                        print "The generation of ccq login certificates has been disabled, skipping the generation of a new certificate!"
+                    if int(certLength) != 0 and not validCertFound:
+                        print "No valid ccq certificate was found, generating a new ccq certificate now!"
+                        #Need to create new Cert file for user!
+                        url = "https://" + str(schedulerIpAddress) + "/srv/gencclogincert"
+                        encodedPassword = encodeString("ccqpwdfrval", str(password))
+                        encodedUserName = encodeString("ccqunfrval", str(userName))
+                        final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": valKey, "certLength": str(certLength)}
+                        data = json.dumps(final)
+                        headers = {'Content-Type': "application/json"}
+                        req = urllib2.Request(url, data, headers)
+                        try:
+                            res = urllib2.urlopen(req).read().decode('utf-8')
+                            res = json.loads(res)
+                            if res['status'] == "success":
+                                newCcqCertFile = open(ccqsubCertDefaultFileLocation, "w")
+                                newCcqCertFile.write(json.dumps(res['payload']))
+                                newCcqCertFile.close()
+                                print "Successfully generated a new ccq certificate file for " + str(userName) + " that will expire in " + str(certLength) + " day(s)!"
+                            else:
+                                print res['payload']
+                        except Exception as ex:
+                            print "There was an issue getting the new ccq certificate from the Server! A new certificate will attempt to be generated after the next job is run!"
+                            print str(ex)
+                    validUser = True
+
+        if str(isCert) == "False":
+            password = encodeString("ccqpwdfrval", str(password))
+            userName = encodeString("ccqunfrval", str(userName))
+
+        values = ccqsubMethods.checkJobIdAndUserValidity(jobId, userName, isCert)
+        if values['status'] != "success":
+            print values['payload']
+            sys.exit(0)
+        else:
+            if not values['payload']['jobExists']:
+                print values['payload']['message']
+                sys.exit(0)
+            else:
+                jobInformation = values['payload']['jobInformation']
+
+        try:
+            #get the instance ID
+            urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
+            instanceId = urlResponse.read()
+        except Exception as e:
+            print "There was a problem trying to delete your job! " + "\nError code: " + str(e)
+            sys.exit(0)
+
+        values = ccqsubMethods.deleteJobFromScheduler(jobInformation['name'], userName, password, instanceId, jobForceDelete, isCert)
+        print values['payload']['payload']
+        sys.exit(0)
+
+    except ImportError as e:
+        controlNodeIpAddress = ""
+        #Not running on a CC AMI will have to send data off to the web service to perform any actions
+        try:
+            configFile = open(ccqsubConfigFileLocation, 'r')
+            for line in configFile:
+                line = line.replace(" ", "")
+                splitLine = line.split('=')
+                if splitLine[0] == "submitHost":
+                    parsedCommand = splitLine[1]
+                    controlNodeIpAddress = parsedCommand[:len(parsedCommand)-1]
+        except IOError as e:
+            print "The ccqsub.config file was not found in " + str(ccqsubConfigFileLocation) + " please create the config file before submitting a job to ccqsub!"
+            sys.exit(0)
+
+        valKey = "unpw"
+        userName = ""
+        password = ""
+        validUser = False
+        attempts = 0
+
+        validCertFound = False
+        validUser = False
+        isCert = False
+
+        if os.path.isfile(ccqsubCertDefaultFileLocation) and int(certLength) != 0:
+            print "Checking the expiration date of the ccq certificate......."
+            values = extractFieldsFromCert()
+            if values['status'] == "success":
+                valuesExtracted = values['payload']
+                successfulCheck = checkCertExpired(valuesExtracted['dateExpires'])
+                if successfulCheck['status'] == "success":
+                    userName = values['payload']['userName']
+                    password = values['payload']['password']
+                    valKey = values['payload']['valKey']
+                    validCertFound = True
+
+                    print "Certificate is still before expiration date, sending for server validation!"
+                    url = "https://" + str(controlNodeIpAddress) + "/srv/validateccqcreds"
+                    final = {"userName": str(userName), "password": str(password), "valKey": str(valKey), "dateExpires": valuesExtracted['dateExpires']}
+                    data = json.dumps(final)
+                    headers = {'Content-Type': "application/json"}
+                    req = urllib2.Request(url, data, headers)
+                    try:
+                        res = urllib2.urlopen(req).read().decode('utf-8')
+                        res = json.loads(res)
+                        if res['status'] == "success":
+                            print "Successfully validated the ccq certificate!"
+                            validUser = True
+                            isCert = True
+                        else:
+                            print res['payload']
+                            print "The ccq certificate file may have been tampered with! Please re-authenticate with ccq in order to receive a new certificate!"
+                            validCertFound = False
+                    except Exception as ex:
+                        print "There was an issue validating the ccq certificate from the Server!"
+                        print str(ex)
+                else:
+                    validCertFound = False
+                    print successfulCheck['payload']
+            else:
+                print "Unable to read values from the ccq certificate file. Reverting to username/password for authentication!"
+
+        if not validCertFound or not validUser:
+            print "Please login in order to submit your job:"
+            while not validUser and attempts < 5:
+                userName = raw_input("Please enter your username: \n")
+                password = getpass.getpass("Please enter your password: \n")
+
+                url = "https://" + str(controlNodeIpAddress) + "/srv/validateccqcreds"
+                encodedPassword = encodeString("ccqpwdfrval", str(password))
+                encodedUserName = encodeString("ccqunfrval", str(userName))
+                final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": "unpw", "dateExpires": "NA"}
+                data = json.dumps(final)
+                headers = {'Content-Type': "application/json"}
+                req = urllib2.Request(url, data, headers)
+                try:
+                    res = urllib2.urlopen(req).read().decode('utf-8')
+                    res = json.loads(res)
+                    if res['status'] == "success":
+                        print "Successfully validated the ccq certificate!"
+                        validUser = True
+                    else:
+                        print res['payload']
+                except Exception as ex:
+                    print "There was an issue validating the ccq certificate from the Server!"
+                    print str(ex)
+
+                attempts += 1
+                if attempts >= 5:
+                    print "Maximum number of user/password combinations reached! Please try again with a valid username/password combination."
+                    sys.exit(0)
+
+        if validUser:
+            if int(certLength) == 0 and not validCertFound:
+                print "The generation of ccq login certificates has been disabled, skipping the generation of a new certificate!"
+            if int(certLength) != 0 and not validCertFound:
+                print "No valid ccq certificate was found, generating a new ccq certificate now!"
+                #Need to create new Cert file for user!
+                url = "https://" + str(controlNodeIpAddress) + "/srv/gencclogincert"
+                encodedPassword = encodeString("ccqpwdfrval", str(password))
+                encodedUserName = encodeString("ccqunfrval", str(userName))
+                final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": valKey, "certLength": str(certLength)}
+                data = json.dumps(final)
+                headers = {'Content-Type': "application/json"}
+                req = urllib2.Request(url, data, headers)
+                try:
+                    res = urllib2.urlopen(req).read().decode('utf-8')
+                    res = json.loads(res)
+                    if res['status'] == "success":
+                        newCcqCertFile = open(ccqsubCertDefaultFileLocation, "w")
+                        newCcqCertFile.write(json.dumps(res['payload']))
+                        newCcqCertFile.close()
+                        print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)!"
+                    else:
+                        print res['payload']
+                except Exception as ex:
+
+                    print str(ex)
+
+            if not isCert:
+                password = encodeString("ccqpwdfrval", str(password))
+                userName = encodeString("ccqunfrval", str(userName))
+
+            url = "https://" + str(controlNodeIpAddress) + "/srv/ccqdel"
+            final = {"jobId": str(jobId), "userName": str(userName), "instanceId": None, "jobNameInScheduler": None, "password": str(password), "jobForceDelete": jobForceDelete, "isCert": str(isCert), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None}
+            data = json.dumps(final)
+            headers = {'Content-Type': "application/json"}
+            req = urllib2.Request(url, data, headers)
+            try:
+                res = urllib2.urlopen(req).read().decode('utf-8')
+                res = json.loads(res)
+                print res["payload"]
+                sys.exit(0)
+            except Exception as ex:
+                print str(ex)
+                sys.exit(0)
+
+def decodeString(k, field):
+    dchars = []
+    field = base64.urlsafe_b64decode(field)
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        dec = chr(abs(ord(field[i])) - ord(k_c) % 256)
+        dchars.append(dec)
+    ds = "".join(dchars)
+    return ds
+
+def encodeString(k, field):
+    enchars = []
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        enc = chr(ord(field[i]) + ord(k_c) % 256)
+        enchars.append(enc)
+    ens = "".join(enchars)
+    return base64.urlsafe_b64encode(ens)
+
+def checkCertExpired(certExpireDate):
+    expirationDate = decodeString("ccqdatstrfrcrtfil", str(certExpireDate))
+
+    currentTime = datetime.now()
+
+    if currentTime > datetime.strptime(expirationDate, "%Y-%m-%d %H:%M:%S.%f"):
+        return {"status": "error", "payload": "The ccq certificate has expired, please login again using your username/password combination to obtain a new ccq certificate!"}
+
+    else:
+        return {"status": "success", "payload": "The ccq certificate is valid! ccq will use the credentials specified in the certificate"}
+
+def extractFieldsFromCert():
+    try:
+        certFile = open(ccqsubCertDefaultFileLocation, "r")
+        certObj = json.load(certFile)
+        return {"status": "success", "payload": certObj}
+
+    except:
+        return {"status": "error", "payload": "There was a problem parsing the ccq certificate!"}
+
+ccqdel()

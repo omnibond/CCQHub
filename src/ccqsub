@@ -1,0 +1,701 @@
+#!/usr/bin/python2.7
+# Copyright Omnibond Systems, LLC. All rights reserved.
+
+# This file is part of OpenCCQ.
+
+# OpenCCQ is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# OpenCCQ is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public License
+# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import base64
+import os
+import urllib2
+import sys
+import json
+import hashlib
+import getpass
+from datetime import date, datetime
+import commands
+
+ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
+ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
+
+def generateJobMD5Hash(jobScriptText):
+    try:
+        #First strip out any whitespace characters that are in the job script
+        jobScriptText = ''.join(jobScriptText.split())
+
+        #Calculate the MD5 hash for the job script:
+        newJobScriptMD5Hash = hashlib.md5(jobScriptText).hexdigest()
+        return {"status": "success", "payload": {"md5": newJobScriptMD5Hash}}
+    except Exception as e:
+        return {"status": "error", "payload": "There was a problem while checking the job script. Please try again in a little bit."}
+
+def ccqsub():
+    parser = argparse.ArgumentParser(description="A wrapper for common schedulers such as Torque, SGE, Condor, and SLURM. Gives the schedulers autoscaling capability "
+                                                 "within the Amazon Cloud. When a user submits a job using this script, the job script will be parsed, the number of "
+                                                 "instances needed determined, and the instances will be launched for the job at run-time. Commands that are specified in the job script take precedence over the options specified on the command line. "
+                                                 "These commands can be denoted inside of the jobscript itself by using the #CC directive/ "
+                                                 "The commands that are available through the #CC directive are -it (instance type), -nt (network type), -ni (number of instances requested), -op (optimization type), -p "
+                                                 "(criteria priority), -cpu (number of CPUs requested), -mem (amount of memory in MB requested), -s (scheduler to use), -st (scheduler type), -jn (job name), -vt (volume type), -us (use spot), -sp (spot price). "
+                                                 "ccqsub will also try to create a generic submit script for the scheduler you are using if you do not specify a job script. "
+                                                 "The output files from the job will appear in the CloudyCluster user's home directory on the instance the job was submitted from by default if you are using a CloudyCluster instance to submit your files. "
+                                                 "However there may be a minute or two delay from when the job finishes to when the files appear on the machine the job was submitted from due to extra processing needed. "
+                                                 "If you submit from a host outside of CloudyCluster the output files will be stored in the CloudyCluster user's home directory on the Access Instance associated with the Cluster that the job was submitted to. "
+                                                 "This behavior can be changed by specifying the -o and -e PBS directives in your job scripts or using the -o and -e ccqsub command line arguments, these tell the scheduler to output the files to the directories specified inside of the job script "
+                                                 "instead of the defaults. If an output file is missing check the /opt/CloudyCluster/ccqsub/undeliveredJobOutput/<CloudyCluster_user_name> directory on the Scheduler the job was submitted on "
+                                                 "as this is the default directory for undeliverable job output files.")
+    parser.add_argument('-V', action='version', version='ccqsub (version 0.2)')
+
+    #If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
+    #Job script file location
+    parser.add_argument('-js', metavar='<job_script_location>', help="The path to the job script file that you want to submit to the scheduler.", default=None, required=True)
+    #Job Name
+    parser.add_argument('-jn', metavar='<job_name>', help="The name of the job that will be saved so you can resubmit the job later without having to resubmit the job script itself.", default=None)
+    # #Network Type Requested
+    parser.add_argument('-nt', metavar='low|moderate|high|10GB', help="Specifies the amount of network capacity needed for the job. If not specified it defaults to \"default\" which means it will not factor into the calculation of instance type needed for the job.", default="default", choices=["low", "moderate", "high", "10GB"])
+    # #Number of total instances wanted
+    parser.add_argument('-ni', metavar='<number_instances>', type=int, help="The number of instances that you want the job to run on. The default setting is 1 instance.", default=1)
+    # #Number of CPUs per instance
+    parser.add_argument('-cpu', metavar='<cpu_count>', type=int, help="The number of CPUs that you want per instance that your job is running on. The default setting is 1 CPU per instance.", default=1)
+    # #Memory Per Instance
+    parser.add_argument('-mem', metavar='<mem_size_in_MB>', type=int, help="The amount of memory (in MB) per instance. The default setting is 1000 MB (1GB) per instance.", default=1000)
+    #Scheduler To use
+    parser.add_argument('-s', metavar='<name_of_scheduler_to_use>', help="Specifies the name of the Scheduler that you want to use. The default value is to use the default Scheduler for the Scheduler type you have requested. This default variable can be set using the ccq.config file with the variable defaultScheduler=<schedulerName>!", default="default")
+    #Scheduler Type
+    parser.add_argument('-st', metavar='Torque|Condor|SGE|SLURM|default', help="Specifies the type of Scheduler that you want to use. The accepted values are Torque, Condor, SGE, and SLURM. If the Scheduler type is not specified with a job script then ccqsub will attempt to figure out from the job script what type of Scheduler the job is to be run on. If no job script is submitted then the value will default to the default Scheduler for the Cluster", default="default", choices=["Torque", "Condor", "SGE", "SLURM", "default"])
+    #Use Spot Instances
+    parser.add_argument('-us', metavar='yes|no', help="Use spot instances instead of dedicated instances. The default option is \"no\"", default="no", choices=["yes", "no"])
+    #Spot Instance Price
+    parser.add_argument('-sp', metavar='<target_spot_price>', help="The targeted spot instance price that you will be willing to pay to run the instances. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0. This argument must be specified if using spot instances!", default=None)
+    #Instance type
+    parser.add_argument('-it', metavar='<instance_type>', help="Specifies the Amazon EC2 instance type that the job is to be run on. If no instance type is specified, then the amount of RAM and CPUs will be used to determine an appropriate Amazon EC2 Instance. If neither of those are specified then the default instance type will be used.", default="default")
+    # Instance Type Optimization
+    parser.add_argument('-op', metavar='cost|performance', help="Specifies whether to use the instance type that is most cost effective or one that will give better performance regardless of cost. The default is \"cost\".", default="cost", choices=["cost", "performance"])
+    # #Criteria Priority
+    parser.add_argument('-p', metavar='mcn|mnc|cmn|cnm|ncm|nmc', help="Specifies the priority that is considered when calculating the appropriate instance type for the job. Where m = memory, n = network, and c = cpu. For example specifying \"-p ncm\" would mean that when calculating the instance type the priority is Network requirements, Cpu requirements, then Memory requirements. This means that Networking is considered first, then the number of Cps, then the amount of memory when choosing an instance type. The default is \"mcn\" or Memory, Cpus, and then Network.", default="mcn", choices=["mcn", "mnc", "cmn", "cnm", "ncm", "nmc"])
+    # Volume Type of Instance
+    parser.add_argument('-vt', metavar='magnetic|ssd', help="Specifies the type of Volume to launch the instances for the job on. The default is \"ssd\". This value can also be set using the volumeType=<volumeType> variable in the ccq.config file.", default="ssd", choices=["magnetic", "ssd"])
+    # Certificate Valid Time
+    parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline!", default="1")
+    # #Check Pricing
+    parser.add_argument('-pr', action='store_true', help="Specifies that CCQ should print the estimated price for a specific job script but not run the job. No resources will be launched and the estimated price of the job will be shown. This only includes in the instance costs per hour.")
+    # #Queue to run job in
+    # parser.add_argument('-q', metavar='<queue_name>', help="The queue that you want to submit your job to. The default setting is the scheduler's default queue", default='default')
+    # Amount of wall time specified
+    # parser.add_argument('-wt', metavar='<wall_time_limit>', help="The maximum amount of time that the job will be allowed to run. The format is: hh:mm:ss, and the default max time is 01:00:00 (1 hour)", default="01:00:00")
+    #Location of file to write stdout to
+    parser.add_argument('-o', metavar='<stdout_file_location>', help="The path to the file where you want the Standard Output from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
+    #Location of file to write stderr to
+    parser.add_argument('-e', metavar='<stderr_file_location>', help="The path to the file where you want the Standard Error from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
+    # #Combine stderr and stdout
+    # parser.add_argument('-j', metavar='yes|no', help="Join the Standard Error and Standard Output into a single file. This single file will be the same file that the Standard Output would normally go ot. The format is yes|no and the default value is no.", default="no", choices=['yes', 'no'])
+    # #Copy Environment
+    # parser.add_argument('-ce', metavar='yes|no', help="Copy the current user environment to the instances when running the job. The format is yes|no and the default value is no.", default='no', choices=['yes', 'no'])
+    # #Event Notifications
+    # parser.add_argument('-m', metavar='a|b|e', help="Defines the set of conditions under which the execution server will send a mail message about the job. Accepted values are 'a', 'b', 'e'. The default values is mail is 'a'.", default='a', choices=['a', 'b', 'e'])
+    # #Mailing Address
+    # parser.add_argument('-M', metavar='<user@address>', help="Declares the list of users to whom mail is sent by the execution server when it sends mail about the job. The user_list argument is of the form: user[@host][,user[@host],...] If unset, the list defaults to the submitting user i.e. the job owner.", default='default')
+    # #Job re-runable
+    # parser.add_argument('-r', metavar='y|n', help="Declares whether the job is re-runable. The option argument is a single character, either y or n. If the argument is \"y\", the job is re-runable. If the argument is \"n\", the job is not re-runable. The default value is y, re-runable.", default='y' , choices=['y', 'n'])
+    # #Account To Charge
+    # parser.add_argument('-acct', metavar='<account_string>', help="Defines the account string associated with the job. The account_string is an undefined string of characters and is interpreted by the server which executes the job. This can be useful for billing purposes. The default value is None.", default="default")
+    # #Begin Time
+    # parser.add_argument('-bt', metavar='<begin_time>', help="Declares the time after which the job is eligible for execution. The date_time argument is in the form: [[[[CC]YY]MM]DD]hhmm[.SS] where CC is the first two digits of the year (the century), YY is the second two digits of the year, MM is the two digits for the month, DD is the day of the month, hh is the hour, mm is the minute, and the optional SS is the seconds. If the month (MM) is not specified, it will default to the current month if the specified day (DD) is in the future. Otherwise, the month will be set to next month. Likewise, if the day (DD) is not specified, it will default to today if the time (hhmm) is in the future. Otherwise, the day will be set to tomorrow. For example, if you submit a job at 11:15 am with a time of -a 1110, the job will be eligible to run at 11:10 am tomorrow.", default="default")
+    # #Job arrays
+    # parser.add_argument('-ja', metavar='<job_array_spec>', help="Specifies the task ids of a job array. Single task arrays are allowed. The default value is None", default="default")
+    # #Path to executable
+    # parser.add_argument('-exe', metavar='<path_to_executable_to_run>', help="Specifies the path to the executable to run. This option is specified if the user cannot create a job script. ccqsub will attempt to create a simple job script from the other command line arguments specified. This parameter is optional and will default to None", default=None)
+
+    args = parser.parse_args()
+
+    jobScriptLocation = args.js
+    jobName = args.jn
+    networkTypeRequested = args.nt
+    numberOfInstancesRequested = args.ni
+    numCpusRequested = args.cpu
+    memoryRequested = args.mem
+    schedulerToUse = args.s
+    schedType = args.st
+    useSpot = args.us
+    spotPrice = args.sp
+    requestedInstanceType = args.it
+    optimizationChoice = args.op
+    criteriaPriority = args.p
+    volumeType = args.vt
+    certLength = args.cl
+    justPrice = args.pr
+
+    #For later on when we want to automatically generate job script
+    # wallTimeRequested = args.wt
+    stdoutFileLocation = args.o
+    stderrFileLocation = args.e
+    # combineStderrAndStdout = args.j
+    # copyEnvironment = args.ce
+    # eventNotification = args.m
+    # mailingAddress = args.M
+    # jobRerunable = args.r
+    # accountToCharge = args.acct
+    # jobBeginTime = args.bt
+    # jobArrays = args.ja
+    # pathToExecutable = args.exe
+
+    controlNodeIpAddress = ""
+
+    currentDirectoryToStoreOutput = os.getcwd()
+
+    try:
+        configFile = open(ccqsubConfigFileLocation, 'r')
+        for line in configFile:
+            line = line.replace(" ", "")
+            splitLine = line.split('=')
+            if splitLine[0] == "certLength":
+                parsedCommand = splitLine[1]
+                certLength = parsedCommand[:len(parsedCommand)-1]
+    except IOError as e:
+        pass
+
+    if jobScriptLocation is not None:
+        status, output = commands.getstatusoutput("pwd")
+        print "A job script location was specified, ccqsub will read the ccqsub/job arguments from the job script instead of from the commandline!"
+        ccOptionsParsed = {"numberOfInstancesRequested": str(numberOfInstancesRequested),  "numCpusRequested": str(numCpusRequested), "wallTimeRequested": "None",
+                                "stdoutFileLocation": str(output), "stderrFileLocation": str(output), "combineStderrAndStdout": "None", "copyEnvironment": "None", "eventNotification": "None", "mailingAddress": "None", "jobRerunable": "None", "memoryRequested": str(memoryRequested), "accountToCharge": "None", "jobBeginTime": "None", "jobArrays": "None", "useSpot": str(useSpot), "spotPrice": str(spotPrice), "requestedInstanceType": str(requestedInstanceType), "networkTypeRequested": str(networkTypeRequested), "optimizationChoice": str(optimizationChoice),  "pathToExecutable": "None", "criteriaPriority": str(criteriaPriority), "schedulerToUse": str(schedulerToUse), "schedType": str(schedType), "volumeType": str(volumeType), "certLength": str(certLength), "jobWorkDir": str(output), "justPrice": str(justPrice)}
+        if jobName is None:
+            #If a job name is not specified with the job script then we assume the name to be the name of the job script
+            splitJobScriptLocation = jobScriptLocation.split('/')
+            jobName = splitJobScriptLocation[len(splitJobScriptLocation)-1]
+
+    else:
+        print "In this version of ccqsub you must submit a job script in order to submit a job. Please create a job script and submit your job again!"
+        sys.exit(0)
+        #This will be for when we don't specify that the user has to submit a job script (probably v2)
+        # print "No job script location was specified, ccqsub will read the ccqsub/job arguments from the commandline!"
+        # ccOptionsParsed = {"numberOfInstancesRequested": str(numberOfInstancesRequested),  "numCpusRequested": str(numCpusRequested), "wallTimeRequested": str(wallTimeRequested),
+        #                         "stdoutFileLocation": str(stdoutFileLocation), "stderrFileLocation": str(stderrFileLocation), "combineStderrAndStdout": str(combineStderrAndStdout), "copyEnvironment": str(copyEnvironment),
+        #                         "eventNotification": str(eventNotification), "mailingAddress": str(mailingAddress), "jobRerunable": str(jobRerunable), "memoryRequested": str(memoryRequested), "accountToCharge": str(accountToCharge),
+        #                         "jobBeginTime": str(jobBeginTime), "jobArrays": str(jobArrays), "requestedInstanceType": str(requestedInstanceType), "networkTypeRequested": str(networkTypeRequested), "optimizationChoice": str(optimizationChoice),
+        #                         "pathToExecutable": str(pathToExecutable), "criteriaPriority": str(criteriaPriority), "schedulerToUse": str(schedulerToUse), "schedType": str(schedType)}
+    jobScriptText = ""
+
+    if jobScriptLocation is not None or jobScriptLocation != "None":
+        #Start spinning things up here!
+        pbsLineCount = 0
+        slurmLineCount = 0
+        sgeLineCount = 0
+        try:
+            jobScript = open(jobScriptLocation, 'r')
+            ccParameters = {}
+            jobScriptText = ""
+            for line in jobScript:
+                jobScriptText += line
+                if line[:3] == "#CC":
+                    #It is a comment and could possibly be a ccqsub command/parameter
+                    #List of possible ccqsub directives that we recognize and support
+                    possibleCommands = ["-it", "-nt", "-op", "-p", "-ni", "-mem", "-cpu", "-s", "-st", "-jn", "-vt", "-us", "-sp"]
+                    argumentNames = {"-mem": "memoryRequested", "-it": "requestedInstanceType", "-nt": "networkTypeRequested",
+                                     "-op": "optimizationChoice", "-p": "criteriaPriority", "-ni": "numberOfInstancesRequested",
+                                     "-cpu": "numCpusRequested", "-s": "schedulerToUse", "-st": "schedType", "-jn": "jobName",
+                                     "-vt": "volumeType", "-us": "useSpot", "-sp": "spotPrice"}
+                    splitLine = line.split(' ')
+                    for command in possibleCommands:
+                        if splitLine[1] == command:
+                            #Set the local variable that could have been passed in command line here
+                            parsedCommand = splitLine[2]
+                            ccOptionsParsed[argumentNames[command]] = parsedCommand[:len(parsedCommand)-1]
+
+                #Reallllly need to add error checking here to make sure they don't put in invalid options!!
+
+                elif line[:4] == "#PBS":
+                    pbsLineCount += 1
+                    #Torque does not have a way to set the current working directory so it is not an option and the job
+                    #runs from the location that the user calls qsub from
+                    #TODO need to fix it so that ccqsub calls the qsub command from the pwd taken in above
+                    #TODO need to make sure that our submission script is asking for the ppn that the user wants!!!!!
+                    possibleCommands = ["-o", "-e", "-l"]
+                    argumentNames = {"-o": "stdoutFileLocation", "-e": "stderrFileLocation"}
+                    splitLine = line.split(' ')
+                    if len(splitLine) > 1:
+                        for command in possibleCommands:
+                            if splitLine[1] == "-l":
+                                possibleArgs = {"mem": "memoryRequested", "nodes": "numberOfInstancesRequested", "ppn": "numCpusRequested"}
+                                subCommands = splitLine[2].split(":")
+                                for subCommand in subCommands:
+                                    parsedCommand = subCommand.split("=")
+                                    ccOptionsParsed[possibleArgs[parsedCommand[0]]] = parsedCommand[1].replace("\n", "")
+
+                            elif len(splitLine) > 1:
+                                if splitLine[1] == command:
+                                    #Set the local variable that could have been passed in command line here
+                                    parsedCommand = splitLine[2]
+                                    ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
+                elif line[:7] == "#SBATCH":
+                    slurmLineCount += 1
+                    possibleCommands = ["-o", "-e", "-D", "--ntasks-per-node", "--mem", "-N", "--nodes"]
+                    argumentNames = {"-o": "stdoutFileLocation", "--output": "stdoutFileLocation", "-e": "stderrFileLocation", "--error": "stderrFileLocation", "-D": "jobWorkDir", "--ntasks-per-node": "numCpusRequested", "--mem": "memoryRequested", "-N": "numberOfInstancesRequested", "--nodes": "numberOfInstancesRequested", "--workdir": "--workdir" }
+                    splitLine = line.split(' ')
+                    for command in possibleCommands:
+                        if len(splitLine) > 1:
+                            if splitLine[1] == command:
+                                #Set the local variable that could have been passed in command line here
+                                parsedCommand = splitLine[2]
+                                ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
+                elif line[:2] == "#$":
+                    sgeLineCount += 1
+            if ccOptionsParsed['schedType'] == "default" and ccOptionsParsed['schedulerToUse'] == "default":
+                if pbsLineCount > slurmLineCount and pbsLineCount > sgeLineCount:
+                    ccOptionsParsed['schedType'] = "Torque"
+                    schedType = "Torque"
+                elif slurmLineCount > pbsLineCount and slurmLineCount > sgeLineCount:
+                    ccOptionsParsed['schedType'] = "SLURM"
+                    schedType = "SLURM"
+                elif sgeLineCount > pbsLineCount and sgeLineCount > slurmLineCount:
+                    ccOptionsParsed['schedType'] = "SGE"
+                    schedType = "SGE"
+                else:
+                    print "\nCannot determine the type of scheduler to submit this job to! Please re-submit the job and specify the scheduler you want to submit to using the -s directive in your job script, via the command line, or via the ccq.config file. You may also specify the type of job (Torque, SGE, SLURM, Condor, PBSPro) using the -st directive in your job script, via command line arguments, or via the ccq.config file!"
+                    sys.exit(0)
+
+        except IOError as e:
+            print "The job script file that was specified (" + str(jobScriptLocation) + ") does not exist! Please check the file path and try again!"
+            sys.exit(0)
+
+        #Make sure all the spot options are valid
+        validateSpotInstanceParameters(ccOptionsParsed)
+
+        #Make sure all the instance parameters that we can check here are valid
+        validateInstanceParameters(ccOptionsParsed)
+
+        #Need to take these parameters that we have found and send them as an object to the WebService that will handle
+        #The actual job submission and things of that nature! Also need to add a DB Entry for the Job as well so it
+        #can be listed from the UI or re-run if needed.
+
+    try:
+        import ccqsubMethods
+
+        if str(justPrice).lower() == "true":
+            parameters = {"ccOptionsParsed": ccOptionsParsed}
+            output = ccqsubMethods.getInstanceType(parameters)
+            if output['status'] != "success":
+                print str(output['payload'])
+                sys.exit(0)
+
+            calculatedPrice = 0
+            gotPrice = False
+
+            if spotPrice is not None:
+                #Need to get spot pricing here!!
+                results = ccqsubMethods.calculatePriceForJob(output['payload']['instanceType'], ccOptionsParsed["numberOfInstancesRequested"], "35", ccOptionsParsed['volumeType'], "OnDemandPrice", True, ccOptionsParsed['spotPrice'])
+                if results['status'] != "success":
+                    print str(results['payload']["error"])
+                else:
+                    calculatedPrice = round(results['payload'], 3)
+                    gotPrice = True
+            else:
+                #Need to get regular pricing here!!
+                results = ccqsubMethods.calculatePriceForJob(output['payload']['instanceType'], ccOptionsParsed["numberOfInstancesRequested"], "35", ccOptionsParsed['volumeType'], "OnDemandPrice", False, None)
+                if results['status'] != "success":
+                    print str(results['payload']["error"])
+                else:
+                    calculatedPrice = round(results['payload'], 3)
+                    gotPrice = True
+            if gotPrice:
+                print "The AWS Instance Type calculated for this job based upon the requested parameters is: " + str(output['payload']['instanceType']) + " with an estimated cost of $" + str(calculatedPrice)
+            sys.exit(0)
+
+        jobInDBAlready = False
+        #Running on a CC AMI now we will save out the job information to the DB and pass the job off to the scheduler
+        #for processing and scaling.
+        validUser = False
+        attempts = 0
+        userName = ""
+        password = ""
+        valKey = "unpw"
+
+        validCertFound = False
+        isCert = False
+
+        schedulerIpInfo = ccqsubMethods.getSchedulerIPInformation(schedulerToUse, schedType)
+        if schedulerIpInfo['status'] == 'success':
+            schedulerIpAddress = schedulerIpInfo['payload']["schedulerIpAddress"]
+            schedulerType = schedulerIpInfo['payload']['schedulerType']
+            schedulerName = schedulerIpInfo['payload']['schedName']
+            schedulerInstanceId = schedulerIpInfo['payload']['schedulerInstanceId']
+
+            ccOptionsParsed["schedulerToUse"] = str(schedulerName)
+            ccOptionsParsed['schedType'] = str(schedulerType)
+
+        else:
+            print "Unable to obtain the information about the " + str(schedulerToUse) + " Scheduler that was requested! Please try again in a few minutes!"
+            sys.exit(0)
+
+        if os.path.isfile(ccqsubCertDefaultFileLocation) and int(certLength) != 0:
+            print "Checking the expiration date of the ccq certificate......."
+            values = extractFieldsFromCert()
+            if values['status'] == "success":
+                valuesExtracted = values['payload']
+                successfulCheck = checkCertExpired(valuesExtracted['dateExpires'])
+                if successfulCheck['status'] == "success":
+                    userName = values['payload']['userName']
+                    password = values['payload']['password']
+                    valKey = values['payload']['valKey']
+                    validCertFound = True
+
+                    print "Certificate is still before expiration date, sending for server validation!"
+                    url = "https://" + str(schedulerIpAddress) + "/srv/validateccqcreds"
+                    final = {"userName": str(userName), "password": str(password), "valKey": str(valKey), "dateExpires": valuesExtracted['dateExpires']}
+                    data = json.dumps(final)
+                    headers = {'Content-Type': "application/json"}
+                    req = urllib2.Request(url, data, headers)
+                    try:
+                        res = urllib2.urlopen(req).read().decode('utf-8')
+                        res = json.loads(res)
+                        if res['status'] == "success":
+                            print "Cert validated successfully!"
+                            validUser = True
+                            isCert = True
+                        else:
+                            print res['payload']
+                            print "The certificate file may have been tampered with! Please re-authenticate with ccq in order to receive a new certificate!"
+                            validCertFound = False
+                    except Exception as ex:
+                        print "There was an issue validating the ccq certificate from the Server!"
+                        print str(ex)
+                else:
+                    validCertFound = False
+                    print successfulCheck['payload']
+            else:
+                print "Unable to read values from the certificate file. Reverting to username/password for authentication!"
+
+        if not validCertFound or not validUser:
+            while not validUser and attempts < 5:
+                userName = raw_input("Please enter your username: \n")
+                password = getpass.getpass("Please enter your password: \n")
+
+                values = ccqsubMethods.checkUserNamePassword(userName, password)
+                if values['status'] != 'success':
+                    print values['payload']
+                    attempts += 1
+                    if attempts >= 5:
+                        print "Maximum number of user/password combinations reached! Please try again with a valid username/password combination."
+                        sys.exit(0)
+                else:
+                    print values['payload']
+                    if int(certLength) == 0 and not validCertFound:
+                        print "The generation of ccq login certificates has been disabled, skipping the generation of a new certificate!"
+                    if int(certLength) != 0 and not validCertFound:
+                        print "No valid ccq certificate was found, generating a new ccq certificate now!"
+                        #Need to create new Cert file for user!
+                        url = "https://" + str(schedulerIpAddress) + "/srv/gencclogincert"
+                        encodedPassword = encodeString("ccqpwdfrval", str(password))
+                        encodedUserName = encodeString("ccqunfrval", str(userName))
+                        final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": valKey, "certLength": str(certLength)}
+                        data = json.dumps(final)
+                        headers = {'Content-Type': "application/json"}
+                        req = urllib2.Request(url, data, headers)
+                        try:
+                            res = urllib2.urlopen(req).read().decode('utf-8')
+                            res = json.loads(res)
+                            if res['status'] == "success":
+                                newCcqCertFile = open(ccqsubCertDefaultFileLocation, "w")
+                                newCcqCertFile.write(json.dumps(res['payload']))
+                                newCcqCertFile.close()
+                                print "Successfully generated a new ccq certificate file for " + str(userName) + " that will expire in " + str(certLength) + " day(s)!"
+                            else:
+                                print res['payload']
+                        except Exception as ex:
+                            print "There was an issue getting the new ccq certificate from the Server! A new certificate will attempt to be generated after the next job is run!"
+                            print str(ex)
+                    validUser = True
+
+        values = generateJobMD5Hash(jobScriptText)
+        if values['status'] != 'success':
+            print values['payload']
+            sys.exit(0)
+        else:
+            jobMD5Hash = values['payload']['md5']
+
+        if str(isCert) == "False":
+            password = encodeString("ccqpwdfrval", str(password))
+            userName = encodeString("ccqunfrval", str(userName))
+
+        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "password": str(password), "isCert": str(isCert), "isRemoteSubmit": "False"}
+        values = ccqsubMethods.readyJobForScheduler(obj)
+        print values['payload']
+        sys.exit(0)
+
+    except ImportError as e:
+        #Not running on a CC AMI will have to send data off to the web service to perform any actions
+        try:
+            configFile = open(ccqsubConfigFileLocation, 'r')
+            for line in configFile:
+                line = line.replace(" ", "")
+                splitLine = line.split('=')
+                if splitLine[0] == "submitHost":
+                    parsedCommand = splitLine[1]
+                    controlNodeIpAddress = parsedCommand[:len(parsedCommand)-1]
+        except IOError as e:
+            print "The ccqsub.config file was not found in " + str(ccqsubConfigFileLocation) + " please create the config file before submitting a job to ccqsub!"
+            sys.exit(0)
+
+        values = generateJobMD5Hash(jobScriptText)
+        if values['status'] != 'success':
+            #print values['payload']
+            sys.exit(0)
+        else:
+            jobMD5Hash = values['payload']['md5']
+
+        valKey = "unpw"
+        userName = ""
+        password = ""
+        validUser = False
+        attempts = 0
+
+        validCertFound = False
+        validUser = False
+        isCert = False
+
+        if os.path.isfile(ccqsubCertDefaultFileLocation) and int(certLength) != 0:
+            print "Checking the expiration date of the ccq certificate......."
+            values = extractFieldsFromCert()
+            if values['status'] == "success":
+                valuesExtracted = values['payload']
+                successfulCheck = checkCertExpired(valuesExtracted['dateExpires'])
+                if successfulCheck['status'] == "success":
+                    userName = values['payload']['userName']
+                    password = values['payload']['password']
+                    valKey = values['payload']['valKey']
+                    validCertFound = True
+
+                    print "The ccq certificate found is still valid, now sending the ccq cert for scheduler validation!"
+                    url = "https://" + str(controlNodeIpAddress) + "/srv/validateccqcreds"
+                    final = {"userName": str(userName), "password": str(password), "valKey": str(valKey), "dateExpires": valuesExtracted['dateExpires']}
+                    data = json.dumps(final)
+                    headers = {'Content-Type': "application/json"}
+                    req = urllib2.Request(url, data, headers)
+                    try:
+                        res = urllib2.urlopen(req).read().decode('utf-8')
+                        res = json.loads(res)
+                        if res['status'] == "success":
+                            print "Successfully validated the ccq certificate!"
+                            validUser = True
+                            isCert = True
+                        else:
+                            print res['payload']
+                            print "The ccq certificate file may have been tampered with! Please re-authenticate with ccq in order to receive a new certificate!"
+                            validCertFound = False
+                    except Exception as ex:
+                        print "There was an issue validating the ccq certificate from the Server!"
+                        print str(ex)
+                else:
+                    validCertFound = False
+                    print successfulCheck['payload']
+            else:
+                print "Unable to read values from the ccq certificate file. Reverting to username/password for authentication!"
+
+        if not validCertFound or not validUser:
+            print "Please login in order to submit your job:"
+            while not validUser and attempts < 5:
+                userName = raw_input("Please enter your username: \n")
+                password = getpass.getpass("Please enter your password: \n")
+
+                url = "https://" + str(controlNodeIpAddress) + "/srv/validateccqcreds"
+                encodedPassword = encodeString("ccqpwdfrval", str(password))
+                encodedUserName = encodeString("ccqunfrval", str(userName))
+                final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": "unpw", "dateExpires": "NA"}
+                data = json.dumps(final)
+                headers = {'Content-Type': "application/json"}
+                req = urllib2.Request(url, data, headers)
+                try:
+                    res = urllib2.urlopen(req).read().decode('utf-8')
+                    res = json.loads(res)
+                    if res['status'] == "success":
+                        validUser = True
+                    else:
+                        print res['payload']
+                except Exception as ex:
+                    print "There was an issue validating the ccq certificate from the Server!"
+                    print str(ex)
+
+                attempts += 1
+                if attempts >= 5:
+                    print "Maximum number of user/password combinations reached! Please try again with a valid username/password combination."
+                    sys.exit(0)
+
+        if validUser:
+            if int(certLength) == 0 and not validCertFound:
+                print "The generation of ccq login certificates has been disabled, skipping the generation of a new certificate!"
+            if int(certLength) != 0 and not validCertFound:
+                print "No valid ccq certificate was found, generating a new ccq certificate now!"
+                #Need to create new Cert file for user!
+                url = "https://" + str(controlNodeIpAddress) + "/srv/gencclogincert"
+                encodedPassword = encodeString("ccqpwdfrval", str(password))
+                encodedUserName = encodeString("ccqunfrval", str(userName))
+                final = {"userName": str(encodedUserName), "password": str(encodedPassword), "valKey": valKey, "certLength": str(certLength)}
+                data = json.dumps(final)
+                headers = {'Content-Type': "application/json"}
+                req = urllib2.Request(url, data, headers)
+                try:
+                    res = urllib2.urlopen(req).read().decode('utf-8')
+                    res = json.loads(res)
+                    if res['status'] == "success":
+                        newCcqCertFile = open(ccqsubCertDefaultFileLocation, "w")
+                        newCcqCertFile.write(json.dumps(res['payload']))
+                        newCcqCertFile.close()
+                        print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)!"
+                    else:
+                        print res['payload']
+                except Exception as ex:
+                    print str(ex)
+
+            if not isCert:
+                password = encodeString("ccqpwdfrval", str(password))
+                userName = encodeString("ccqunfrval", str(userName))
+
+            url = "https://" + str(controlNodeIpAddress) + "/srv/ccqsub"
+            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "password": str(password), "isCert": str(isCert)}
+            data = json.dumps(final)
+            headers = {'Content-Type': "application/json"}
+            req = urllib2.Request(url, data, headers)
+            try:
+                res = urllib2.urlopen(req).read().decode('utf-8')
+                res = json.loads(res)
+                print res["payload"]
+                sys.exit(0)
+            except Exception as ex:
+                print str(ex)
+                sys.exit(0)
+        else:
+            print "Login failure! Please try again!"
+            sys.exit(0)
+
+
+def validateSpotInstanceParameters(ccOptionsParsed):
+    #Validate Spot Instance Information
+    if ccOptionsParsed["useSpot"] == "yes":
+        try:
+            import ccqsubMethods
+            import platform
+            (name, ver, id) =  platform.linux_distribution()
+            if ccOptionsParsed["useSpot"] == "yes" and name.replace(" ", "").lower().startswith("redhat"):
+                print "Red Hat based EC2 Instances currently do not support Spot Instances. Please re-submit your job with -us set to no!"
+                sys.exit(0)
+        except:
+            pass
+
+        if ccOptionsParsed["spotPrice"] is not None:
+            try:
+                tempFloat = float(ccOptionsParsed["spotPrice"])
+                if tempFloat <= 0:
+                    print "You must specify a spot price greater than 0!"
+                    sys.exit(0)
+                else:
+                    ccOptionsParsed["spotPrice"] = "{:1.222f}".format(tempFloat)
+            except:
+                print "The spot price you have entered is not valid! A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0!"
+                sys.exit(0)
+
+        else:
+            print "If you specify the use of spot instances you must specify a target spot price as well!"
+            sys.exit(0)
+
+def validateInstanceParameters(ccOptionsParsed):
+    try:
+        tempCPUs = int(ccOptionsParsed["numCpusRequested"])
+        if tempCPUs <= 0:
+            print "Invalid number of CPUs specified! The number of CPUs must be a valid integer greater than 0."
+            sys.exit(0)
+    except:
+        print "Invalid number of CPUs specified! The number of CPUs must be a valid integer greater than 0."
+        sys.exit(0)
+    try:
+        tempMemory = int(ccOptionsParsed["memoryRequested"])
+        if tempMemory <= 0:
+            print "Invalid amount of Memory specified! The amount of Memory must be a valid integer greater than 0."
+            sys.exit(0)
+    except:
+        print "Invalid amount of Memory specified! The amount of Memory must be a valid integer greater than 0."
+        sys.exit(0)
+    try:
+        tempNumInstances = int(ccOptionsParsed["numberOfInstancesRequested"])
+        if tempNumInstances <= 0:
+            print "Invalid number of requested instances! The amount of Instances Requested must be a valid integer greater than 0."
+            sys.exit(0)
+    except:
+        print "Invalid number of requested instances! The amount of Instances Requested must be a valid integer greater than 0."
+        sys.exit(0)
+
+    try:
+        tempcertLength = int(ccOptionsParsed["certLength"])
+        if tempcertLength < 0:
+            print "Invalid certificate valid length! The number of days valid must be a valid integer greater than or equal to 0."
+            sys.exit(0)
+    except:
+        print "Invalid certificate valid length! The number of days valid must be a valid integer greater than or equal to 0."
+        sys.exit(0)
+
+    if ccOptionsParsed["optimizationChoice"] != "cost" and ccOptionsParsed["optimizationChoice"] != "performance":
+        print "Invalid optimization choice specified! The valid optimization choices are \"cost\" or \"performance\"."
+        sys.exit(0)
+    if ccOptionsParsed["criteriaPriority"] != "mcn" and  ccOptionsParsed["criteriaPriority"] != "mnc" and  ccOptionsParsed["criteriaPriority"] != "cmn" and  ccOptionsParsed["criteriaPriority"] != "cnm" and ccOptionsParsed["criteriaPriority"] != "ncm" and  ccOptionsParsed["criteriaPriority"] != "nmc":
+        print "Invalid criteria priority specified! The valid criteria priority are: mcn, mnc, cmn, cnm, ncm, or nmc."
+        sys.exit(0)
+    if ccOptionsParsed["networkTypeRequested"] != "low" and ccOptionsParsed["networkTypeRequested"] != "moderate" and ccOptionsParsed["networkTypeRequested"] != "high" and ccOptionsParsed["networkTypeRequested"] != "10GB" and ccOptionsParsed["networkTypeRequested"] != "default":
+        print "Invalid network type specified! The valid network types are: low, moderate, high, or 10GB."
+        sys.exit(0)
+
+def decodeString(k, field):
+    dchars = []
+    field = base64.urlsafe_b64decode(str(field))
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        dec = chr(abs(ord(field[i])) - ord(k_c) % 256)
+        dchars.append(dec)
+    ds = "".join(dchars)
+    return ds
+
+def encodeString(k, field):
+    enchars = []
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        enc = chr(ord(field[i]) + ord(k_c) % 256)
+        enchars.append(enc)
+    ens = "".join(enchars)
+    return base64.urlsafe_b64encode(ens)
+
+def checkCertExpired(certExpireDate):
+    expirationDate = decodeString("ccqdatstrfrcrtfil", str(certExpireDate))
+
+    currentTime = datetime.now()
+
+    if currentTime > datetime.strptime(expirationDate, "%Y-%m-%d %H:%M:%S.%f"):
+        return {"status": "error", "payload": "The ccq certificate has expired, please login again using your username/password combination to obtain a new ccq certificate!"}
+
+    else:
+        return {"status": "success", "payload": "The ccq certificate is valid! ccq will use the credentials specified in the certificate"}
+
+def extractFieldsFromCert():
+    try:
+        certFile = open(ccqsubCertDefaultFileLocation, "r")
+        certObj = json.load(certFile)
+        return {"status": "success", "payload": certObj}
+
+    except:
+        return {"status": "error", "payload": "There was a problem parsing the ccq certificate!"}
+
+
+
+ccqsub()
+
+#Need to ask if when they submit a job script all their configuration parameters should be in it or if they can still
+#specify via the command line. I think it would be better to just have it if they submit a job script then they should
+#put all the configuration in the script. That way we don't have conflicting parameters in the script and the commandline
