@@ -25,8 +25,8 @@ import os
 import base64
 from datetime import datetime
 
-ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
-ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
+ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
+ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
 
 def ccqdel():
     parser = argparse.ArgumentParser(description="A utility that allows you to delete/kill jobs that have been submitted using the ccqsub command.")

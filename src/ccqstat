@@ -25,8 +25,8 @@ import getpass
 import os
 from datetime import datetime
 
-ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
-ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
+ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
+ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
 
 def ccqstat():
     parser = argparse.ArgumentParser(description="A utility that gives you the status of all the jobs that have been submitted using the ccqsub command.")

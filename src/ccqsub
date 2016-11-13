@@ -27,8 +27,8 @@ import getpass
 from datetime import date, datetime
 import commands
 
-ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
-ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
+ccqsubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
+ccqsubCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 
 def generateJobMD5Hash(jobScriptText):
     try:

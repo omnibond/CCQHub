@@ -38,8 +38,6 @@ import commands
 import math
 from datetime import date, datetime, timedelta
 import platform
-import salt.config
-import salt.utils.event
 
 tempJobScriptLocation = ccqHubMethods.tempScriptJobLocation
 tempJobOutputLocation = ccqHubMethods.tempJobOutputLocation
