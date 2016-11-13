@@ -1,19 +1,19 @@
 # Copyright Omnibond Systems, LLC. All rights reserved.
 
-# This file is part of OpenCCQ.
+# This file is part of CCQHub.
 
-# OpenCCQ is free software: you can redistribute it and/or modify
+# CCQHub is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 
-# OpenCCQ is distributed in the hope that it will be useful,
+# CCQHub is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 
 # You should have received a copy of the GNU Lesser General Public License
-# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
 import base64
 import socket
@@ -27,7 +27,7 @@ import datetime
 from datetime import timedelta
 
 def checkJobIdAndUserValidity(jobId, userName, isCert):
-    import ClusterMethods
+    import ccqHubMethods
 
     if str(isCert) == "True":
         values = decodeCertUnPwVals(str(userName), None)
@@ -38,7 +38,7 @@ def checkJobIdAndUserValidity(jobId, userName, isCert):
     else:
         userName = decodeString("ccqunfrval", str(userName))
 
-    results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+    results = ccqHubMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
@@ -54,7 +54,7 @@ def checkJobIdAndUserValidity(jobId, userName, isCert):
 
 def updateJobInDB(fieldsToAddToJob, jobId):
     #Update the job DB entry with the status of the job!
-    import ClusterMethods
+    import ccqHubMethods
     done = False
     timeToWait = 10
     maxTimeToWait = 120
@@ -62,7 +62,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
     quit = False
     while not done:
         try:
-            results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+            results = ccqHubMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -90,14 +90,14 @@ def updateJobInDB(fieldsToAddToJob, jobId):
 
 def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
     #Update the job DB entry with the status of the job!
-    import ClusterMethods
+    import ccqHubMethods
     done = False
     timeToWait = 10
     maxTimeToWait = 120
     timeElapsed = 0
     while not done:
         try:
-            results = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+            results = ccqHubMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -141,8 +141,8 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
 def appendSuffixToJobScriptName(jobName):
     #There are conflicting job names who's MD5 hashes do not match so here we append a number to the end of the
     #jobName in order to make it unique
-    import ClusterMethods
-    items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    import ccqHubMethods
+    items = ccqHubMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -167,9 +167,9 @@ def appendSuffixToJobScriptName(jobName):
     return {"status": "success", "payload": {"jobName": jobName}}
 
 def compareJobScriptsMD5s(jobName, newJobMD5):
-    import ClusterMethods
+    import ccqHubMethods
     conflictingJobMD5 = ""
-    items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    items = ccqHubMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -186,9 +186,9 @@ def compareJobScriptsMD5s(jobName, newJobMD5):
         return {"status": "success", "payload": {"sameJob": False}}
 
 def checkUniqueness(typeToCompare, parameter, jobName=None):
-    import ClusterMethods
+    import ccqHubMethods
     if typeToCompare == "jobScript":
-        items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
+        items = ccqHubMethods.queryObject(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -201,7 +201,7 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         return {"status": "success", "payload": {"isTaken": False}}
 
     elif typeToCompare == "jobId":
-        items = ClusterMethods.queryObject(None, "RecType-Job-name-", "query", "dict", "beginsWith")
+        items = ccqHubMethods.queryObject(None, "RecType-Job-name-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -221,7 +221,7 @@ def putJobScriptInDB(obj):
     userName = obj['userName']
     jobMD5Hash = obj['jobMD5']
 
-    import ClusterMethods
+    import ccqHubMethods
     obj = {}
     obj['action'] = "create"
     data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
@@ -230,7 +230,7 @@ def putJobScriptInDB(obj):
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
     obj['obj'] = data
-    response = ClusterMethods.handleObj(obj)
+    response = ccqHubMethods.handleObj(obj)
     if response['status'] == "success" or response['status'] == "partial":
         item = response['payload']
         return {"status": "success", "payload": "Successfully saved the job script to the database!"}
@@ -256,7 +256,7 @@ def putJobToRunInDB(obj):
     submitHostInstanceId = obj['submitHostInstanceId']
     schedClusterName = obj['schedClusterName']
 
-    import ClusterMethods
+    import ccqHubMethods
     generatedJobId = ""
     done = False
     while not done:
@@ -286,7 +286,7 @@ def putJobToRunInDB(obj):
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
     obj['obj'] = data
-    response = ClusterMethods.handleObj(obj)
+    response = ccqHubMethods.handleObj(obj)
     if response['status'] == "success" or response['status'] == "partial":
         item = response['payload']
 
@@ -296,7 +296,7 @@ def putJobToRunInDB(obj):
         timeElapsed = 0
         while not done:
             try:
-                items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+                items = ccqHubMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
                 if items['status'] == "success":
                     items = items['payload']
                 else:
@@ -318,10 +318,10 @@ def putJobToRunInDB(obj):
         return {"status": "error", "payload": {str(response['message'])}}
 
 def checkUserNamePassword(userName, password):
-    import ClusterMethods
+    import ccqHubMethods
     try:
         theUser = None
-        res = ClusterMethods.queryObject(None, "RecType-Collaborator-userName-" + str(userName), "query", "json", "beginsWith")
+        res = ccqHubMethods.queryObject(None, "RecType-Collaborator-userName-" + str(userName), "query", "json", "beginsWith")
         if res['status'] == "success":
             results = res['payload']
             for item in results:
@@ -346,10 +346,10 @@ def checkUserNamePassword(userName, password):
         return {"status": "error", "payload": "Invalid username or password! Please try again!"}
 
 def getSchedulerIPInformation(schedName, schedType):
-    import ClusterMethods
+    import ccqHubMethods
 
     if schedName == "default":
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = ccqHubMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -363,7 +363,7 @@ def getSchedulerIPInformation(schedName, schedType):
                     isAutoscaling = True
                 return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP']), "clusterName": str(scheduler['clusterName']), "schedulerType": str(scheduler['schedType']), "schedName": str(scheduler['schedName']), "isAutoscaling": isAutoscaling, "instanceName": scheduler['instanceName'], "isDefaultScheduler": scheduler['defaultScheduler'], "schedulerInstanceId": scheduler["instanceID"]}}
 
-    items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
+    items = ccqHubMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -383,7 +383,7 @@ def getSchedulerIPInformation(schedName, schedType):
     return {'status': 'error', 'payload': "The requested scheduler was not found in the Database!"}
 
 def getInstanceType(obj):
-    import ClusterMethods
+    import ccqHubMethods
     ccOptionsParsed = obj['ccOptionsParsed']
     instanceType = ccOptionsParsed['requestedInstanceType']
     print "InstanceType " + str(instanceType)
@@ -391,12 +391,12 @@ def getInstanceType(obj):
         instanceType = ccOptionsParsed['requestedInstanceType']
         urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
         availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
+        values = ccqHubMethods.getRegion(availabilityZone, "")
         if values['status'] != 'success':
             return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
         else:
             region = values['payload']
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
+        values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
         if values['status'] != 'success':
            return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! Please try again in a few minutes!" + str(values['payload'])}
         else:
@@ -410,19 +410,19 @@ def getInstanceType(obj):
     else:
         urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
         availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
+        values = ccqHubMethods.getRegion(availabilityZone, "")
         if values['status'] != 'success':
             return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
         else:
             region = values['payload']
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
+        values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
         if values['status'] != 'success':
            return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! Please try again in a few minutes!" + str(values['payload'])}
         else:
             instancesInRegion = values['payload']
 
             obj = {"numCpusRequested": ccOptionsParsed['numCpusRequested'], "memoryRequested": ccOptionsParsed['memoryRequested'], "networkTypeRequested": ccOptionsParsed['networkTypeRequested'], "instancesInRegion": instancesInRegion, "criteriaPriority": ccOptionsParsed['criteriaPriority'], "optimization": ccOptionsParsed['optimizationChoice']}
-            values = ClusterMethods.calculateInstanceTypeForJob(obj)
+            values = ccqHubMethods.calculateInstanceTypeForJob(obj)
             if values['status'] != 'success':
                 return {"status": "error", "payload":"There was an error trying to calculate the instance type needed for this job based upon the memory and cpu requirements specified! Please review the requirements and try again!"}
             else:
@@ -540,7 +540,7 @@ def readyJobForScheduler(obj):
 def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCert, schedName=None):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
-    import ClusterMethods
+    import ccqHubMethods
 
     if jobId == "all" and schedName is not None:
         schedulerIpAddress = ""
@@ -548,7 +548,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
         schedulerInstanceName = ""
         schedulerInstanceId = ""
 
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+        items = ccqHubMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -604,7 +604,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
 
     instanceClusterName = None
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = ccqHubMethods.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -639,7 +639,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
 def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete, isCert):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
-    import ClusterMethods
+    import ccqHubMethods
 
     values = checkJobIdAndUserValidity(jobId, userName, isCert)
     if values['status'] != "success":
@@ -666,7 +666,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
 
     instanceClusterName = None
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = ccqHubMethods.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -815,14 +815,14 @@ def encodeString(k, field):
     return base64.urlsafe_b64encode(ens)
 
 def getControlNodeForCCInstance():
-    import ClusterMethods
+    import ccqHubMethods
 
     clusterName = ""
     controlNodeIp = ""
     urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
     instanceId = urlResponse.read()
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = ccqHubMethods.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -831,7 +831,7 @@ def getControlNodeForCCInstance():
     for item in items:
         clusterName = item['clusterName']
 
-    items = ClusterMethods.queryObject(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
+    items = ccqHubMethods.queryObject(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -847,8 +847,8 @@ def getControlNodeForCCInstance():
         return {"status": "error", "payload": "There was a problem getting the ControlNode IP address!"}
 
 def getSchedulerAndSchedTypeFromJob(jobId):
-    import ClusterMethods
-    results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+    import ccqHubMethods
+    results = ccqHubMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
@@ -874,10 +874,10 @@ def getSchedulerAndSchedTypeFromJob(jobId):
     return {"status": "error", "payload": "The job Id requested does not exist in the Database!"}
 
 def getSchedulerIpByName(schedName):
-    import ClusterMethods
+    import ccqHubMethods
 
     if schedName == "default":
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = ccqHubMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -890,7 +890,7 @@ def getSchedulerIpByName(schedName):
 
         return {'status': 'error', 'payload': "The requested default scheduler was not found in the Database!"}
 
-    items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+    items = ccqHubMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:

@@ -1,19 +1,19 @@
 # Copyright Omnibond Systems, LLC. All rights reserved.
 
-# This file is part of OpenCCQ.
+# This file is part of CCQHub.
 
-# OpenCCQ is free software: you can redistribute it and/or modify
+# CCQHub is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 
-# OpenCCQ is distributed in the hope that it will be useful,
+# CCQHub is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 
 # You should have received a copy of the GNU Lesser General Public License
-# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import sys
@@ -25,16 +25,16 @@ import math
 from Scheduler import Scheduler
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import ClusterMethods
+import ccqHubMethods
 import ccqsubMethods
 import traceback
 import time
 import commands
 
-clusterInformationLogFileLocation = ClusterMethods.clusterInformationLogFileLocation
-logFileDirectory = ClusterMethods.logFileDirectory
-scriptDirectory = ClusterMethods.scriptDirectory
-cloudyClusterDefaultSSHUser = ClusterMethods.cloudyClusterDefaultSSHUser
+clusterInformationLogFileLocation = ccqHubMethods.clusterInformationLogFileLocation
+logFileDirectory = ccqHubMethods.logFileDirectory
+scriptDirectory = ccqHubMethods.scriptDirectory
+cloudyClusterDefaultSSHUser = ccqHubMethods.cloudyClusterDefaultSSHUser
 
 class SlurmScheduler(Scheduler):
 
@@ -43,9 +43,9 @@ class SlurmScheduler(Scheduler):
 
     def checkJobs(self, instancesToCheck, canidatesForTermination, toTerminate, instancesRunningOn, instanceRelations, job, isAutoscalingJob):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         jobInDBStillRunning = False
         status = ""
@@ -139,9 +139,9 @@ class SlurmScheduler(Scheduler):
 
     def checkNodeForNodesToPossiblyTerminate(self, instanceNamesToCheck, instanceIdsToCheck):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         toPossiblyTerminate = []
         instancesToCheck = ""
@@ -193,12 +193,12 @@ class SlurmScheduler(Scheduler):
 
     def submitJobToScheduler(self, userName, jobName, jobId, hostList, tempJobScriptLocation, hostArray, hostIdArray, isAutoscaling, jobWorkDir):
         if isAutoscaling:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
-            print "sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
-            status, output = commands.getstatusoutput("sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
+            print "sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
+            status, output = commands.getstatusoutput("sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
             jobName = output.split(" ")[3]
             if status == 0:
                 pending = True
@@ -260,11 +260,11 @@ class SlurmScheduler(Scheduler):
 
             return {'status': "success", "payload": "The job was submitted successfully!"}
         else:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
-            status, output = commands.getstatusoutput("sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
+            status, output = commands.getstatusoutput("sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
             jobName = output.split(" ")[3]
             if status == 0:
 
@@ -310,9 +310,9 @@ class SlurmScheduler(Scheduler):
 
     def takeComputeNodeOffline(self, computeNodeInstanceId):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         #Get short hostname since the long one is passed in
         computeNodeInstanceId = str(computeNodeInstanceId).split(".")[0]
@@ -322,9 +322,9 @@ class SlurmScheduler(Scheduler):
 
     def setComputeNodeOnline(self, computeNodeInstanceId):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         #Get short hostname since the long one is passed in
         computeNodeInstanceId = str(computeNodeInstanceId).split(".")[0]
@@ -335,14 +335,14 @@ class SlurmScheduler(Scheduler):
     def checkIfInstancesAlreadyAvailableInScheduler(self, requestedInstanceType, numberOfInstancesRequested):
         urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
         availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
+        values = ccqHubMethods.getRegion(availabilityZone, "")
 
         if values['status'] != 'success':
             return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
         else:
             region = values['payload']
         instancesInRegion =[]
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
+        values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
         if values['status'] != 'success':
            return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS!" + str(values['payload'])}
         else:
@@ -363,9 +363,9 @@ class SlurmScheduler(Scheduler):
 
         instanceNamesFree = []
 
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         #Get all instances that are currently associated with the slurm scheduler and put them in a list
         status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scontrol -o show node")
@@ -393,7 +393,7 @@ class SlurmScheduler(Scheduler):
         if len(listOfNodesAndAttrs) < int(numberOfInstancesRequested):
             return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
         else:
-            results = ClusterMethods.queryObject(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
+            results = ccqHubMethods.queryObject(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -403,7 +403,7 @@ class SlurmScheduler(Scheduler):
                 instancesComputeGroupList[DDBitem['instanceName'].split(".")[0]] = DDBitem['groupName']
 
         listOfComputeGroupInstanceTypes = {}
-        results = ClusterMethods.queryObject(None, "RecType-ComputeGroupConfig-clusterName-", "query", "dict", "beginsWith")
+        results = ccqHubMethods.queryObject(None, "RecType-ComputeGroupConfig-clusterName-", "query", "dict", "beginsWith")
         if results['status'] == "success":
             results = results['payload']
         else:
@@ -467,9 +467,9 @@ class SlurmScheduler(Scheduler):
             return {"status": "success", "payload": {"instancesFound": True, "newInstanceNamesAndIds": newInstanceNamesAndIds}}
 
     def getJobStatusFromScheduler(self, jobId, jobNameInScheduler, userName):
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         if jobId == "all":
             status, output = commands.getstatusoutput('sudo /opt/slurm/bin/squeue -u ' + str(userName))
         else:
@@ -482,15 +482,15 @@ class SlurmScheduler(Scheduler):
 
     def deleteJobFromScheduler(self, jobForceDelete, jobNameInScheduler):
         if jobForceDelete:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scancel -f " + str(jobNameInScheduler))
             print output
         else:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scancel " + str(jobNameInScheduler))
             print output
         return {"status": "success", "payload": "Successfully issued the job deletion command! Job should be terminating, if not please try the force or purge option!"}

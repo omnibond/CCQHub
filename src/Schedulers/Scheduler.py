@@ -1,30 +1,33 @@
 # Copyright Omnibond Systems, LLC. All rights reserved.
 
-# This file is part of OpenCCQ.
+# This file is part of CCQHub.
 
-# OpenCCQ is free software: you can redistribute it and/or modify
+# CCQHub is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 
-# OpenCCQ is distributed in the hope that it will be useful,
+# CCQHub is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 
 # You should have received a copy of the GNU Lesser General Public License
-# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
 
 import os, sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import ClusterMethods
+sys.path.append('../Database')
 import time
 import traceback
 
-clusterInformationLogFileLocation = ClusterMethods.clusterInformationLogFileLocation
-logFileDirectory = ClusterMethods.logFileDirectory
-scriptDirectory = ClusterMethods.scriptDirectory
+import sqlLite3Database
+
+ccqHubMethods = None
+
+clusterInformationLogFileLocation = ccqHubMethods.clusterInformationLogFileLocation
+logFileDirectory = ccqHubMethods.logFileDirectory
+scriptDirectory = ccqHubMethods.scriptDirectory
 
 sleepTime = 30  # how long to sleep between checks for number of nodes registered in seconds
 timeOut = 600  # max time to wait in seconds per node
