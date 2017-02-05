@@ -1,60 +1,49 @@
-# Copyright Omnibond Systems, LLC. All rights reserved.
+#Copyright Omnibond Systems, LLC. All rights reserved.
 
-# This file is part of OpenCCQ.
+# This file is part of CCQHub.
 
-# OpenCCQ is free software: you can redistribute it and/or modify
+# CCQHub is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 
-# OpenCCQ is distributed in the hope that it will be useful,
+# CCQHub is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 
 # You should have received a copy of the GNU Lesser General Public License
-# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
-
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 import base64
+import os
 import socket
+import sys
+import time
 import traceback
 import urllib2
-import sys
 import json
-import time
 from random import randint
 import datetime
 from datetime import timedelta
+import ccqHubVars
 
-def checkJobIdAndUserValidity(jobId, userName, isCert):
-    import ClusterMethods
+# sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
+# from Slurm import SlurmScheduler
+# from Torque import TorqueScheduler
+# from Condor import CondorScheduler
+# from Openlava import OpenlavaScheduler
 
-    if str(isCert) == "True":
-        values = decodeCertUnPwVals(str(userName), None)
-        if values['status'] != "success":
-            return {"status": "error", "payload": {"error": "There was a problem trying to decode the credentials!", "traceback": ''.join(traceback.format_stack())}}
-        else:
-            userName = values['payload']['decUname']
-    else:
-        userName = decodeString("ccqunfrval", str(userName))
+sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
+from sqlLite3Database import sqlLite3Database
 
-    results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
-    if results['status'] == "success":
-        results = results['payload']
-    else:
-        #Need to update the job status here and somehow notify the user the job has failed
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
-    for job in results:
-        if job['userName'] == str(userName):
-            return {"status": "success", "payload": {'jobExists': True, "jobInformation": job}}
-        else:
-            return {"status": "success", "payload": {'jobExists': False, "message": "You do not have permission to view this job's information!"}}
-    return {"status": "success", "payload": {'jobExists': False, "message": "The specified job Id does not exist in the database!"}}
+if ccqHubVars.databaseType == "sqlite3":
+    dbInterface = sqlLite3Database()
+else:
+    print "Unsupported DB Type specified!"
+
 
 def updateJobInDB(fieldsToAddToJob, jobId):
     #Update the job DB entry with the status of the job!
-    import ClusterMethods
     done = False
     timeToWait = 10
     maxTimeToWait = 120
@@ -62,7 +51,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
     quit = False
     while not done:
         try:
-            results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+            results = dbInterface.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -90,14 +79,13 @@ def updateJobInDB(fieldsToAddToJob, jobId):
 
 def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
     #Update the job DB entry with the status of the job!
-    import ClusterMethods
     done = False
     timeToWait = 10
     maxTimeToWait = 120
     timeElapsed = 0
     while not done:
         try:
-            results = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+            results = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -141,8 +129,7 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
 def appendSuffixToJobScriptName(jobName):
     #There are conflicting job names who's MD5 hashes do not match so here we append a number to the end of the
     #jobName in order to make it unique
-    import ClusterMethods
-    items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -167,9 +154,8 @@ def appendSuffixToJobScriptName(jobName):
     return {"status": "success", "payload": {"jobName": jobName}}
 
 def compareJobScriptsMD5s(jobName, newJobMD5):
-    import ClusterMethods
     conflictingJobMD5 = ""
-    items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -186,9 +172,8 @@ def compareJobScriptsMD5s(jobName, newJobMD5):
         return {"status": "success", "payload": {"sameJob": False}}
 
 def checkUniqueness(typeToCompare, parameter, jobName=None):
-    import ClusterMethods
     if typeToCompare == "jobScript":
-        items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
+        items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -201,7 +186,7 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         return {"status": "success", "payload": {"isTaken": False}}
 
     elif typeToCompare == "jobId":
-        items = ClusterMethods.queryObject(None, "RecType-Job-name-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObject(None, "RecType-Job-name-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -221,7 +206,6 @@ def putJobScriptInDB(obj):
     userName = obj['userName']
     jobMD5Hash = obj['jobMD5']
 
-    import ClusterMethods
     obj = {}
     obj['action'] = "create"
     data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
@@ -230,7 +214,7 @@ def putJobScriptInDB(obj):
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
     obj['obj'] = data
-    response = ClusterMethods.handleObj(obj)
+    response = dbInterface.handleObj(obj)
     if response['status'] == "success" or response['status'] == "partial":
         item = response['payload']
         return {"status": "success", "payload": "Successfully saved the job script to the database!"}
@@ -256,7 +240,6 @@ def putJobToRunInDB(obj):
     submitHostInstanceId = obj['submitHostInstanceId']
     schedClusterName = obj['schedClusterName']
 
-    import ClusterMethods
     generatedJobId = ""
     done = False
     while not done:
@@ -286,7 +269,7 @@ def putJobToRunInDB(obj):
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
     obj['obj'] = data
-    response = ClusterMethods.handleObj(obj)
+    response = dbInterface.handleObj(obj)
     if response['status'] == "success" or response['status'] == "partial":
         item = response['payload']
 
@@ -296,7 +279,7 @@ def putJobToRunInDB(obj):
         timeElapsed = 0
         while not done:
             try:
-                items = ClusterMethods.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+                items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
                 if items['status'] == "success":
                     items = items['payload']
                 else:
@@ -317,39 +300,9 @@ def putJobToRunInDB(obj):
     else:
         return {"status": "error", "payload": {str(response['message'])}}
 
-def checkUserNamePassword(userName, password):
-    import ClusterMethods
-    try:
-        theUser = None
-        res = ClusterMethods.queryObject(None, "RecType-Collaborator-userName-" + str(userName), "query", "json", "beginsWith")
-        if res['status'] == "success":
-            results = res['payload']
-            for item in results:
-                theUser = item
-                break
-        else:
-            return {"status": "error", "payload": "Invalid username or password! Please try again!"}
-
-        if theUser is not None:
-            res = decStr(theUser['password'])
-            if res['status'] == "success":
-                storedPassword = res['payload']['string']
-            else:
-                return {"status": "error", "payload": "Invalid username or password! Please try again!"}
-            if str(password) == str(storedPassword):
-                    return {"status": "success", "payload": "Login Successful!"}
-            else:
-                return {"status": "error", "payload": "Invalid username or password! Please try again!"}
-        else:
-            return {"status": "error", "payload": "Invalid username or password! Please try again!"}
-    except Exception as ex:
-        return {"status": "error", "payload": "Invalid username or password! Please try again!"}
-
 def getSchedulerIPInformation(schedName, schedType):
-    import ClusterMethods
-
     if schedName == "default":
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -363,7 +316,7 @@ def getSchedulerIPInformation(schedName, schedType):
                     isAutoscaling = True
                 return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP']), "clusterName": str(scheduler['clusterName']), "schedulerType": str(scheduler['schedType']), "schedName": str(scheduler['schedName']), "isAutoscaling": isAutoscaling, "instanceName": scheduler['instanceName'], "isDefaultScheduler": scheduler['defaultScheduler'], "schedulerInstanceId": scheduler["instanceID"]}}
 
-    items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
+    items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -382,53 +335,8 @@ def getSchedulerIPInformation(schedName, schedType):
 
     return {'status': 'error', 'payload': "The requested scheduler was not found in the Database!"}
 
-def getInstanceType(obj):
-    import ClusterMethods
-    ccOptionsParsed = obj['ccOptionsParsed']
-    instanceType = ccOptionsParsed['requestedInstanceType']
-    print "InstanceType " + str(instanceType)
-    if instanceType != "default":
-        instanceType = ccOptionsParsed['requestedInstanceType']
-        urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
-        availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
-        if values['status'] != 'success':
-            return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
-        else:
-            region = values['payload']
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
-        if values['status'] != 'success':
-           return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! Please try again in a few minutes!" + str(values['payload'])}
-        else:
-            instancesInRegion = values['payload']
-            try:
-                instancesInRegion[instanceType]
-                print "The instance type " + str(instanceType) + " is currently available in the " + str(region) + " region."
-                return {"status": "success", "payload": {"instanceType": str(instanceType)}}
-            except Exception as e:
-                return {"status": "error", "payload": "The instance type " + str(instanceType) + " is not currently available in the " + str(region) + " region. Please try again with a different instance type. We are always updating the instances available in each region as Amazon adds more instances."}
-    else:
-        urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
-        availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
-        if values['status'] != 'success':
-            return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
-        else:
-            region = values['payload']
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
-        if values['status'] != 'success':
-           return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! Please try again in a few minutes!" + str(values['payload'])}
-        else:
-            instancesInRegion = values['payload']
-
-            obj = {"numCpusRequested": ccOptionsParsed['numCpusRequested'], "memoryRequested": ccOptionsParsed['memoryRequested'], "networkTypeRequested": ccOptionsParsed['networkTypeRequested'], "instancesInRegion": instancesInRegion, "criteriaPriority": ccOptionsParsed['criteriaPriority'], "optimization": ccOptionsParsed['optimizationChoice']}
-            values = ClusterMethods.calculateInstanceTypeForJob(obj)
-            if values['status'] != 'success':
-                return {"status": "error", "payload":"There was an error trying to calculate the instance type needed for this job based upon the memory and cpu requirements specified! Please review the requirements and try again!"}
-            else:
-                instanceType = values['payload']
-                return {"status": "success", "payload": {"instanceType": str(instanceType)}}
-
+# This method will only be called when we are submitting locally and therefore shouldn't need to do any of the cert auth
+# stuff because it will be being called locally only.
 def readyJobForScheduler(obj):
     jobInDBAlready = False
     jobScriptLocation = obj['jobScriptLocation']
@@ -442,18 +350,9 @@ def readyJobForScheduler(obj):
     schedType = ccOptionsCommandLine["schedType"]
     isRemoteSubmit = obj["isRemoteSubmit"]
 
-    #Stuff for if authed from cert file
-    isCert = obj['isCert']
-    if str(isCert) == "True":
-        values = decodeCertUnPwVals(str(userName), str(password))
-        if values['status'] != "success":
-            return {"status": "error", "payload": {"error": "There was a problem trying to decode the credentials!", "traceback": ''.join(traceback.format_stack())}}
-        else:
-            decodedUserName = values['payload']['decUname']
-            decodedPassword = values['payload']['decPass']
-    else:
-        decodedPassword = decodeString("ccqpwdfrval", str(password))
-        decodedUserName = decodeString("ccqunfrval", str(userName))
+    #TODO Will need to obtain username and password here!
+    decodedUserName = None
+    decodedPassword = None
 
     schedName = schedulerToUse
 
@@ -475,13 +374,6 @@ def readyJobForScheduler(obj):
     #print clusterName
 
     obj = {"clusterName": str(clusterName), "ccOptionsParsed": ccOptionsCommandLine}
-    values = getInstanceType(obj)
-    if values['status'] == 'success':
-        ccOptionsCommandLine['requestedInstanceType'] = values['payload']["instanceType"]
-        ccOptionsCommandLine['instanceType'] = values['payload']["instanceType"]
-    else:
-        return {"status": "error", "payload": values['payload']}
-
     values = checkUniqueness("jobScript", jobName)
     if values['status'] == 'success' and values['payload']['isTaken']:
         results = compareJobScriptsMD5s(jobName, jobMD5Hash)
@@ -517,38 +409,36 @@ def readyJobForScheduler(obj):
 
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
-
-    if str(isCert) == "False":
-        userName = encodeString("ccqunfrval", str(decodedUserName))
-        password = encodeString("ccqpwdfrval", str(decodedPassword))
-
-    url = "http://" + str(schedulerIpAddress) + "/srv/ccqsub"
-    final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobId": str(jobId), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(userName), "password": str(password), "schedName": str(schedName), "isCert": str(isCert)}
-    data = json.dumps(final)
-    headers = {'Content-Type': "application/json"}
-    req = urllib2.Request(url, data, headers)
-    try:
-        res = urllib2.urlopen(req, timeout=5).read().decode('utf-8')
-    except socket.timeout as e:
-        return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
-    except Exception as ex:
-        print str(ex)
-        return {"status": "error", "payload": "There was an error trying to submit your job! " + str(ex)}
+    # Shouldn't need to do any of this because the node the code is running on should be able to submit the job on behalf of the user
+    # if str(isCert) == "False":
+    #     userName = encodeString("ccqunfrval", str(decodedUserName))
+    #     password = encodeString("ccqpwdfrval", str(decodedPassword))
+    #
+    # url = "http://" + str(schedulerIpAddress) + "/srv/ccqsub"
+    # final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobId": str(jobId), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(userName), "password": str(password), "schedName": str(schedName), "isCert": str(isCert)}
+    # data = json.dumps(final)
+    # headers = {'Content-Type': "application/json"}
+    # req = urllib2.Request(url, data, headers)
+    # try:
+    #     res = urllib2.urlopen(req, timeout=5).read().decode('utf-8')
+    # except socket.timeout as e:
+    #     return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
+    # except Exception as ex:
+    #     print str(ex)
+    #     return {"status": "error", "payload": "There was an error trying to submit your job! " + str(ex)}
 
     return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
 
 def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCert, schedName=None):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
-    import ClusterMethods
-
     if jobId == "all" and schedName is not None:
         schedulerIpAddress = ""
         schedType = ""
         schedulerInstanceName = ""
         schedulerInstanceId = ""
 
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+        items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -579,15 +469,20 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
             print str(ex)
             return {"status": "error", "payload": "There was an error trying to get the status of the jobs running on the Scheduler " + str(schedName) + "! " + str(ex)}
 
-    values = checkJobIdAndUserValidity(jobId, userName, isCert)
-    if values['status'] != "success":
-        return {"status": "error", "payload": values['payload']}
-    else:
-        if not values['payload']['jobExists']:
-            print values['payload']['message']
-            return {"status": "error", "payload": values['payload']['message']}
-        else:
-            jobInformation = values['payload']['jobInformation']
+    # We will have to validate the user/password/key at some point however the way it is currently done isn't going to work
+    # Probably going to have to go hit the server and try and auth things that way kinda like how ccq in the cloud works
+    # values = checkJobIdAndUserValidity(jobId, userName, isCert)
+    # if values['status'] != "success":
+    #     return {"status": "error", "payload": values['payload']}
+    # else:
+    #     if not values['payload']['jobExists']:
+    #         print values['payload']['message']
+    #         return {"status": "error", "payload": values['payload']['message']}
+    #     else:
+    #         jobInformation = values['payload']['jobInformation']
+
+    #TODO we are going to have to go out to the other scheduler/db to get the information about the job
+    jobInformation ={}
 
     schedulerToUse = jobInformation['schedulerUsed']
     schedType = jobInformation['schedType']
@@ -604,7 +499,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
 
     instanceClusterName = None
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -639,17 +534,19 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
 def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete, isCert):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
-    import ClusterMethods
 
-    values = checkJobIdAndUserValidity(jobId, userName, isCert)
-    if values['status'] != "success":
-        return {"status": "error", "payload": values['payload']}
-    else:
-        if not values['payload']['jobExists']:
-            print values['payload']['message']
-            return {"status": "error", "payload": values['payload']['message']}
-        else:
-            jobInformation = values['payload']['jobInformation']
+    #TODO This is going to have to go out and validate with the server and everything before deleting a job so this could be interesting
+    # values = checkJobIdAndUserValidity(jobId, userName, isCert)
+    # if values['status'] != "success":
+    #     return {"status": "error", "payload": values['payload']}
+    # else:
+    #     if not values['payload']['jobExists']:
+    #         print values['payload']['message']
+    #         return {"status": "error", "payload": values['payload']['message']}
+    #     else:
+    #         jobInformation = values['payload']['jobInformation']
+
+    jobInformation = {}
 
     schedulerToUse = jobInformation['schedulerUsed']
     schedType = jobInformation['schedType']
@@ -666,7 +563,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
 
     instanceClusterName = None
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -698,131 +595,13 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
     else:
         return {"status": "partial-failure", "payload": "There was an error encountered trying to delete the job! The job you want to delete on is running on a Cluster that is not the one you are currently using!\n"}
 
-def decodeString(k, field):
-    dchars = []
-    field = base64.urlsafe_b64decode(str(field))
-    for i in xrange(len(field)):
-        k_c = k[i % len(k)]
-        dec = chr(abs(ord(field[i])) - ord(k_c) % 256)
-        dchars.append(dec)
-    ds = "".join(dchars)
-    return ds
-
-def checkCertExpired(certExpireDate):
-    print "Checking Cert"
-    expirationDate = decodeString("ccqdatstrfrcrtfil", str(certExpireDate))
-
-    currentTime = datetime.datetime.now()
-
-    if currentTime > expirationDate:
-        return {"status": "error", "payload": "The ccq certificate has expired, please remove it and login again to obtain a new ccq certificate!"}
-
-    else:
-        return {"status": "success", "payload": "The ccq certificate is valid, using the credentials specified in the certificate"}
-
-def validateCertificate(userName, password, valKey, dateExpires):
-    userName = base64.urlsafe_b64decode(userName)
-    password = base64.urlsafe_b64decode(password)
-    valKey = base64.urlsafe_b64decode(valKey)
-
-    #Need to decrypt everything now!
-    decryptedExpireDate = decodeString("ccqdatstrfrcrtfil", str(dateExpires))
-    try:
-        splitUser = userName.split(":")
-        userObj = {"string": splitUser[0], "key": splitUser[1], "iv": splitUser[2]}
-
-        splitPass = password.split(":")
-        passObj = {"string": splitPass[0], "key": splitPass[1], "iv": splitPass[2]}
-    except Exception as e:
-        return {"status": "error", "payload": "Certificate was unable to be validated!"}
-
-    certDecodedUser = decStr(userObj)
-    if certDecodedUser['status'] != "success":
-        return {"status": "error", "payload": "Certificate was unable to be validated!"}
-    else:
-        certDecodedUser = certDecodedUser['payload']['string']
-
-    certDecodedPass = decStr(passObj)
-    if certDecodedPass['status'] != "success":
-        return {"status": "error", "payload": "Certificate was unable to be validated!"}
-    else:
-        certDecodedPass = certDecodedPass['payload']['string']
-    #Validate valKey
-    p1 = str(decryptedExpireDate).split(" ")[1]
-
-    count = 0
-    uPlace = 0
-    pPlace = 0
-
-    finV = ""
-    for l in p1:
-        finV += str(l)
-        if count % 2 == 0 and uPlace < len(certDecodedUser):
-            finV += str(certDecodedUser[uPlace])
-            uPlace += 1
-        elif pPlace < len(certDecodedPass):
-            finV += str(certDecodedPass[pPlace])
-            pPlace += 1
-        count += 1
-
-    if str(valKey) == str(finV):
-        return {"status": "success", "payload": "Certificate Successfully Validated!"}
-    else:
-        return {"status": "error", "payload": "Certificate was unable to be validated!"}
-
-def decodeCertUnPwVals(userName, password):
-    userObj = {}
-    passObj = {}
-    try:
-        if userName is not None:
-            userName = base64.urlsafe_b64decode(str(userName))
-            splitUser = userName.split(":")
-            userObj = {"string": splitUser[0], "key": splitUser[1], "iv": splitUser[2]}
-
-        if password is not None:
-            password = base64.urlsafe_b64decode(str(password))
-            splitPass = password.split(":")
-            passObj = {"string": splitPass[0], "key": splitPass[1], "iv": splitPass[2]}
-    except Exception as e:
-        return {"status": "error", "payload": "Certificate was unable to be validated!"}
-
-    certDecodedPass = ""
-    certDecodedUser = ""
-
-    if userName is not None:
-        certDecodedUser = decStr(userObj)
-        if certDecodedUser['status'] != "success":
-            return {"status": "error", "payload": "Certificate was unable to be validated!"}
-        else:
-            certDecodedUser = certDecodedUser['payload']['string']
-
-    if password is not None:
-        certDecodedPass = decStr(passObj)
-        if certDecodedPass['status'] != "success":
-            return {"status": "error", "payload": "Certificate was unable to be validated!"}
-        else:
-            certDecodedPass = certDecodedPass['payload']['string']
-
-    return {"status": "success", "payload": {"decPass": str(certDecodedPass), "decUname": str(certDecodedUser)}}
-
-def encodeString(k, field):
-    enchars = []
-    for i in xrange(len(field)):
-        k_c = k[i % len(k)]
-        enc = chr(ord(field[i]) + ord(k_c) % 256)
-        enchars.append(enc)
-    ens = "".join(enchars)
-    return base64.urlsafe_b64encode(ens)
-
 def getControlNodeForCCInstance():
-    import ClusterMethods
-
     clusterName = ""
     controlNodeIp = ""
     urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
     instanceId = urlResponse.read()
 
-    items = ClusterMethods.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObject(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -831,7 +610,7 @@ def getControlNodeForCCInstance():
     for item in items:
         clusterName = item['clusterName']
 
-    items = ClusterMethods.queryObject(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
+    items = dbInterface.queryObject(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -847,8 +626,7 @@ def getControlNodeForCCInstance():
         return {"status": "error", "payload": "There was a problem getting the ControlNode IP address!"}
 
 def getSchedulerAndSchedTypeFromJob(jobId):
-    import ClusterMethods
-    results = ClusterMethods.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+    results = dbInterface.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
@@ -874,10 +652,8 @@ def getSchedulerAndSchedTypeFromJob(jobId):
     return {"status": "error", "payload": "The job Id requested does not exist in the Database!"}
 
 def getSchedulerIpByName(schedName):
-    import ClusterMethods
-
     if schedName == "default":
-        items = ClusterMethods.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -890,7 +666,7 @@ def getSchedulerIpByName(schedName):
 
         return {'status': 'error', 'payload': "The requested default scheduler was not found in the Database!"}
 
-    items = ClusterMethods.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -908,7 +684,6 @@ def getSchedulerIpByName(schedName):
 def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, instanceVolumeType, purchaseType, isSpotJob, spotPrice):
     try:
         import Cluster
-
         numberOfInstances = float(numberOfInstances)
         instanceVolumeSize = float(instanceVolumeSize)
 
@@ -963,3 +738,12 @@ def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, in
     except ImportError as e:
         print "Unable to determine price! Not running on a CC instance!"
         return {"status": "error", "payload": {"error": "Unable to calculate pricing for the job! CCQ not running on a CC instance!", "traceback": str(traceback.format_exc(e))}}
+
+def encodeString(k, field):
+    enchars = []
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        enc = chr(ord(field[i]) + ord(k_c) % 256)
+        enchars.append(enc)
+    ens = "".join(enchars)
+    return base64.urlsafe_b64encode(ens)

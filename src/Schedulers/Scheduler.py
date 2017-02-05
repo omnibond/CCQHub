@@ -18,7 +18,7 @@
 
 import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import ClusterMethods
+import ccqHubMethods
 import time
 import traceback
 
@@ -41,32 +41,32 @@ class Scheduler(object):
 
     #Base classes
     def checkJobs(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: checkJobs"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: checkJobs"}
 
     def removeComputeNodesFromScheduler(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: removeComputeNodesFromScheduler"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: removeComputeNodesFromScheduler"}
 
     def setComputeNodeOnline(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: setComputeNodeOnline"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: setComputeNodeOnline"}
 
     def takeComputeNodeOffline(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: takeComputeNodeOffline"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: takeComputeNodeOffline"}
 
     def checkNodeForNodesToPossiblyTerminate(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: checkNodeForNodesToPossiblyTerminate"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: checkNodeForNodesToPossiblyTerminate"}
 
     # This method should take the same parameters for all schedulers! This is critical for CCQ
     def submitJobToScheduler(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: submitJobToScheduler"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: submitJobToScheduler"}
 
     def checkIfInstancesAlreadyAvailableInScheduler(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: checkIfInstancesAlreadyAvailableInScheduler"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: checkIfInstancesAlreadyAvailableInScheduler"}
 
     def getJobStatusFromScheduler(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: getJobStatus"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: getJobStatus"}
 
     def deleteJobFromScheduler(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: deleteJobFromScheduler"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: deleteJobFromScheduler"}
 
     def putComputeNodesToRunJobOnInCorrectFormat(self, **kwargs):
-        return {"status" : "error", "payload": "Base Scheduler Class Not Called Error In: putComputeNodesToRunJobOnInCorrectFormat"}
+        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: putComputeNodesToRunJobOnInCorrectFormat"}
