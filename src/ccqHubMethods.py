@@ -25,7 +25,6 @@ import json
 from random import randint
 import datetime
 from datetime import timedelta
-import ccqHubVars
 
 # sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 # from Slurm import SlurmScheduler
@@ -36,10 +35,7 @@ import ccqHubVars
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
 from sqlLite3Database import sqlLite3Database
 
-if ccqHubVars.databaseType == "sqlite3":
-    dbInterface = sqlLite3Database()
-else:
-    print "Unsupported DB Type specified!"
+dbInterface = sqlLite3Database()
 
 
 def updateJobInDB(fieldsToAddToJob, jobId):

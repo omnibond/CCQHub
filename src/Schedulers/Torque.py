@@ -1,19 +1,19 @@
 # Copyright Omnibond Systems, LLC. All rights reserved.
 
-# This file is part of OpenCCQ.
+# This file is part of CCQHub.
 
-# OpenCCQ is free software: you can redistribute it and/or modify
+# CCQHub is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 
-# OpenCCQ is distributed in the hope that it will be useful,
+# CCQHub is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 
 # You should have received a copy of the GNU Lesser General Public License
-# along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import sys
 import commands
@@ -28,7 +28,7 @@ import traceback
 import time
 import logging
 
-logFileDirectory = "/var/logs/OpenCCQ"
+logFileDirectory = "/var/logs/CCQHub"
 
 logging.basicConfig(filename=str(logFileDirectory) + 'torque.log', level=logging.DEBUG)
 
@@ -43,9 +43,9 @@ class TorqueScheduler(Scheduler):
 
     def checkJobs(self, instancesToCheck, canidatesForTermination, toTerminate, instancesRunningOn, instanceRelations, job, isAutoscalingJob):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         jobInDBStillRunning = False
         if isAutoscalingJob == "true":
@@ -96,9 +96,9 @@ class TorqueScheduler(Scheduler):
 
     def checkNodeForNodesToPossiblyTerminate(self, instanceNamesToCheck, instanceIdsToCheck):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         toPossiblyTerminate = []
         instancesToCheck = ""
@@ -155,31 +155,31 @@ class TorqueScheduler(Scheduler):
 
     def takeComputeNodeOffline(self, computeNodeInstanceId):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         os.system('/opt/torque/bin/pbsnodes -o ' + str(computeNodeInstanceId))
         return {"status" : "success", "payload": "Disabled the compute node successfully so no new jobs will be assigned to it!"}
 
     def setComputeNodeOnline(self, computeNodeInstanceId):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         os.system('/opt/torque/bin/pbsnodes -c ' + str(computeNodeInstanceId))
         return {"status" : "success", "payload": "Enabled the compute node successfully so new jobs will be assigned to it!"}
 
     def submitJobToScheduler(self, userName, jobName, jobId, hostList, tempJobScriptLocation, hostArray, hostIdArray, isAutoscaling, jobWorkDir):
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         os.system("sudo /opt/torque/sbin/trqauthd")
 
         if isAutoscaling:
-            print "sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e -l nodes=" + str(hostList) + " " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
-            status, output = commands.getstatusoutput("sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e -l nodes=" + str(hostList) + " " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
+            print "sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e -l nodes=" + str(hostList) + " " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
+            status, output = commands.getstatusoutput("sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e -l nodes=" + str(hostList) + " " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
             jobName = output
             if status == 0:
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
@@ -199,8 +199,8 @@ class TorqueScheduler(Scheduler):
                 print "There was an error trying to submit the job to the scheduler!\n" + output
                 return {"status": "error", "payload": "There was an error trying to submit the job to the scheduler!\n" + output}
         else:
-            print "/opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
-            status, output = commands.getstatusoutput("sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ClusterMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
+            print "/opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
+            status, output = commands.getstatusoutput("sudo /opt/torque/bin/qsub -P " + str(userName) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
             jobName = output
             if status == 0:
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
@@ -233,13 +233,13 @@ class TorqueScheduler(Scheduler):
     def checkIfInstancesAlreadyAvailableInScheduler(self, requestedInstanceType, numberOfInstancesRequested):
         urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
         availabilityZone = urlResponse.read()
-        values = ClusterMethods.getRegion(availabilityZone, "")
+        values = ccqHubMethods.getRegion(availabilityZone, "")
 
         if values['status'] != 'success':
             return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
         else:
             region = values['payload']
-        values = ClusterMethods.getAllInformationAboutInstancesInRegion(region)
+        values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
         if values['status'] != 'success':
            return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS!" + str(values['payload'])}
         else:
@@ -254,9 +254,9 @@ class TorqueScheduler(Scheduler):
 
         instanceNamesFree = []
 
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         os.system("sudo /opt/torque/sbin/trqauthd")
         status, instanceStates = commands.getstatusoutput('/opt/torque/bin/pbsnodes')
         splitOutput = instanceStates.split('\n')
@@ -265,7 +265,7 @@ class TorqueScheduler(Scheduler):
         if len(splitOutput)/9 < int(numberOfInstancesRequested):
             return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
         else:
-            results = ClusterMethods.queryObject(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
+            results = ccqHubMethods.queryObject(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -325,9 +325,9 @@ class TorqueScheduler(Scheduler):
             return {"status": "success", "payload": {"instancesFound": True, "newInstanceNamesAndIds": newInstanceNamesAndIds}}
 
     def getJobStatusFromScheduler(self, jobId, jobNameInScheduler, userName):
-        os.environ["USER"] = ClusterMethods.ccqUserName
-        os.environ["USERNAME"] = ClusterMethods.ccqUserName
-        os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+        os.environ["USER"] = ccqHubMethods.ccqUserName
+        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         os.system("sudo /opt/torque/sbin/trqauthd")
         if jobId == "all":
             status, output = commands.getstatusoutput('/opt/torque/bin/qstat -u ' + str(userName))
@@ -341,16 +341,16 @@ class TorqueScheduler(Scheduler):
 
     def deleteJobFromScheduler(self, jobForceDelete, jobNameInScheduler):
         if jobForceDelete:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             os.system("sudo /opt/torque/sbin/trqauthd")
             status, output = commands.getstatusoutput("/opt/torque/bin/qdel -p " + str(jobNameInScheduler))
             print output
         else:
-            os.environ["USER"] = ClusterMethods.ccqUserName
-            os.environ["USERNAME"] = ClusterMethods.ccqUserName
-            os.environ["LOGNAME"] = ClusterMethods.ccqUserName
+            os.environ["USER"] = ccqHubMethods.ccqUserName
+            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             os.system("sudo /opt/torque/sbin/trqauthd")
             status, output = commands.getstatusoutput("/opt/torque/bin/qdel " + str(jobNameInScheduler))
             print output

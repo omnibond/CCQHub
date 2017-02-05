@@ -1,8 +1,18 @@
-#!/usr/bin/python2.7
-#Copyright Omnibond Systems, LLC. All rights reserved.
-#
-#Terms of Service are located at:
-#http://www.cloudycluster.com/termsofservice
+# This file is part of CCQHub.
+
+# CCQHub is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+
+# CCQHub is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public License
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
+
 
 import argparse
 import sys
@@ -14,10 +24,11 @@ import os
 import base64
 from datetime import datetime
 
-ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
-ccqConfigFileLocationDefault = "/opt/CloudyCluster/ccq/ccq.config"
-ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
-ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccq.log")
+ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
+ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
+ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
+ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.log")
+
 
 def ccqdel():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud

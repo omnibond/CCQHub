@@ -1,16 +1,17 @@
-#!/usr/bin/python2.7
-#Copyright Omnibond Systems, LLC. All rights reserved.
-#
-#Terms of Service are located at:
-#http://www.cloudycluster.com/termsofservice
+# This file is part of CCQHub.
 
-#A wrapper for common schedulers such as Torque, SGE, Condor, and SLURM. Gives the schedulers autoscaling capability
-#within the Amazon Cloud. When a user submits a job using this script, the job script will be parsed, the number of
-#instances needed determined, and the instances will be launched for the job at run-time.
-#ccqsub will also create a generic submit script for the scheduler you are using if you do not specify a job script.
+# CCQHub is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
 
-#This will interact with a WebService that will then perform all the needed actions instead of doing things locally
-#This will allow us to run the utility on a remote instance rather than just on the one Scheduler instance.
+# CCQHub is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public License
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
 import base64
@@ -24,10 +25,10 @@ import getpass
 from datetime import date, datetime
 import commands
 
-ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccq.config")
-ccqConfigFileLocationDefault = "/opt/CloudyCluster/ccq/ccq.config"
-ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqCert.cert")
-ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccq.log")
+ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
+ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
+ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
+ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.log")
 
 def ccqsub():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud
