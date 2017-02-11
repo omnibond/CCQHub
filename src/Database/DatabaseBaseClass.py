@@ -27,22 +27,22 @@ class Database():
 
     # Base classes
     def queryObj(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: queryObj"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: queryObj"}
 
     def handleObj(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: handleObj"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: handleObj"}
 
     def addObj(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: addObj"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: addObj"}
 
     def deleteObj(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: deleteObj"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: deleteObj"}
 
     def addIndexes(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: addIndexes"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: addIndexes"}
 
     def deleteIndexes(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: deleteIndexes"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: deleteIndexes"}
 
     def createTable(self, **kwargs):
         # Schema for the Lookup table must only contain the following fields and types:
@@ -51,7 +51,7 @@ class Database():
         # Schema for the Object Table must only contain the following fields and types:
         # hash_key (string), meta_var (json object), jobScriptText (string), sharingObj (json object)
 
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: createTable"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: createTable"}
 
     def tableConnect(self, **kwargs):
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: tableConnect"}
+        return {"status": "error", "payload": "Base Database Class Not Called Error In: tableConnect"}

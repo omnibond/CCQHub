@@ -1,0 +1,56 @@
+#Copyright Omnibond Systems, LLC. All rights reserved.
+
+# This file is part of CCQHub.
+
+# CCQHub is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+
+# CCQHub is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public License
+# along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
+
+import ccqHubMethods
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description="Setup utility for ccqHub that generates an encryption key for the ccqHub instance to use and performs the initial setup of the ccqHub DBs.")
+    parser.add_argument('-V', '--version', action='version', version='ccqHubSetup (version 0.1)')
+    parser.add_argument('-nr', '--nr', help="Specifies that ccqHub should be run with non-root privileges. This is not recommended for data security and privacy reasons.")
+    parser.add_argument('-kp', '--keyPath', help="The location to store the ccqHub encryption key on the machine. The path should only be readable/writable by root if running as root (most secure) or only readable/writeable by the user running this command (non-root mode). The default location is /etc/ccqHub/.key if the path is not specified.", default="/etc/ccqHub/.keys")
+    args = parser.parse_args()
+
+    nonRoot = args.nr
+    keyPath = args.keyPath
+
+    values = ccqHubMethods.checkAdminRights()
+    if values['status'] != "success":
+       print "You are not running with root permissions. It is advised that ccqHub be run with root permissons in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub."
+    else:
+      isAdmin = values['payload']
+
+    values = ccqHubMethods.generateEncryptionKey("/root/ccqHubKey")
+    if values['status'] != "success":
+       print values['payload']
+    else:
+       key = values['payload']
+       results = ccqHubMethods.encryptString(key, "JUST TESTING THIS OUT CURRENTLY")
+       print results
+       encData = results['payload']
+
+    #Try to decrypt the string and retrieve the key from the file
+    values = ccqHubMethods.retrieveEncryptionKey("/root/ccqHubKey")
+    print values
+
+    print ccqHubMethods.decryptString(values['payload'], encData)
+    # Need to write out initial object to the DB that will store the API keys for ccqHub
+    values = ccqHubMethods.writeAPIKeyObj()
+
+    # Need to generate an API key that must be used in order to perform ccqHub management functions
+    values = ccqHubMethods.saveAndGenUserAppKey()
+

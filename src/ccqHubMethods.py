@@ -401,27 +401,6 @@ def readyJobForScheduler(obj):
         return {"status": "error", "payload": values['payload']}
     else:
         jobId = values['payload']['jobId']
-        #print jobId
-
-    #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
-    #generated job Id
-    # Shouldn't need to do any of this because the node the code is running on should be able to submit the job on behalf of the user
-    # if str(isCert) == "False":
-    #     userName = encodeString("ccqunfrval", str(decodedUserName))
-    #     password = encodeString("ccqpwdfrval", str(decodedPassword))
-    #
-    # url = "http://" + str(schedulerIpAddress) + "/srv/ccqsub"
-    # final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobId": str(jobId), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(userName), "password": str(password), "schedName": str(schedName), "isCert": str(isCert)}
-    # data = json.dumps(final)
-    # headers = {'Content-Type': "application/json"}
-    # req = urllib2.Request(url, data, headers)
-    # try:
-    #     res = urllib2.urlopen(req, timeout=5).read().decode('utf-8')
-    # except socket.timeout as e:
-    #     return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
-    # except Exception as ex:
-    #     print str(ex)
-    #     return {"status": "error", "payload": "There was an error trying to submit your job! " + str(ex)}
 
     return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
 
@@ -743,3 +722,138 @@ def encodeString(k, field):
         enchars.append(enc)
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
+
+
+def writeAPIKeyObj():
+    try:
+        placeHolder = encryptionFunctions.encryptString({"string": "{\"keys\": [], \"keyPerms\": {}}"})
+        obj = {'action': "create", 'obj': {"RecType": "APIKeys", "name": "APIKeys"}}
+
+        # Put values in the object to be saved to Database
+        for key in placeHolder['payload']:
+            obj['obj'][key] = placeHolder['payload'][key]
+        res = dbInterface.handleObj(**obj)
+
+        if res['status'] == "success":
+            return {"status": "success", "messsage": "Successfully saved the APIKeys object"}
+        else:
+            return {"status": "error", "message": res['message']}
+    except Exception as ex:
+        return {"status": "error", "message": traceback.format_exc()}
+
+def saveAndGenUserAppKey():
+    import hashlib
+    import binascii
+    import uuid
+    try:
+        dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
+        response = dbInterface.queryObject(None, "APIKeys", "get", "json")
+        if response['status'] == "success":
+            results = response['payload']
+            for tempItem in results:
+                apiKeysAndPerms = encryptionFunctions.decryptString(tempItem)
+                apiKeysAndPerms = json.loads(apiKeysAndPerms['payload']['string'])
+                apiKeys = apiKeysAndPerms['keys']
+                keyPerms = apiKeysAndPerms['keyPerms']
+
+                #Add the newly generated key and the key's permissions to the key object
+                #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
+                apiKeys.append(binascii.hexlify(dk))
+                #keyPerms[str(binascii.hexlify(dk))] = str(uuid)
+
+                apiKeysAndPerms['keys'] = apiKeys
+                apiKeysAndPerms['keyPerms'] = keyPerms
+
+                #Now we have to encrypt the new object and save it back to the DB
+                temp = json.dumps(apiKeysAndPerms)
+                tempObj = {"string": str(temp)}
+                placeHolder = encryptionFunctions.encryptString(tempObj)
+                for key in placeHolder['payload']:
+                    tempItem[key] = placeHolder['payload'][key]
+
+                obj = {}
+                obj['action'] = "modify"
+                obj['obj'] = tempItem
+                #the driver does not care about the apiKey object so no event
+                event = None
+                res = dbInterface.handleObj(obj, event)
+                if res['status'] != "success":
+                    return {"status": "error", "message": res['message']}
+
+        else:
+            return {"status": "error", "message": str(response['message'])}
+        return {"status": "success", "message": "Successfully generated and saved APIKey for ccqHub root access.", "payload": binascii.hexlify(dk)}
+    except Exception as e:
+        return {"status": "error", "message": traceback.format_exc(e)}
+
+def encryptString(key, data):
+    # Perform the actual encryption of the data utilizing the key that is provided
+    try:
+        from cryptography.fernet import Fernet
+        f = Fernet(key)
+        encData = f.encrypt(str(data))
+        return {"status": "success", "payload": encData}
+    except Exception as e:
+        return {"status": "error", "payload": {"error": "There was a problem encrypting the string.", "traceback": str(traceback.format_exc(e))}}
+
+def generateEncryptionKey(keyPath):
+    # Generate the key to be used for encryption if there is not one created. This will be placed in a file that is only
+    # accessible by the administrator of ccqHub and therefore cannot be run by other users since they cannot read the file
+    try:
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key()
+
+        # Now that the key has been generated we need to store it in a file in a location that is only accessible by the
+        # admin ccqHub user
+        try:
+            keyFile = open(str(keyPath), "w+")
+            keyFile.write("Warning changing the contents of this file may render ccqHub data inaccessible.\n")
+            keyFile.write(str(key))
+            keyFile.close()
+        except Exception as e:
+            return {"status": "error", "payload": str(traceback.format_exc(e))}
+        return {"status": "success", "payload": key}
+    except Exception as e:
+        return {"status": "error", "payload": {"error": "There was a problem generating the encryption key for ccqHub.", "traceback": str(traceback.format_exc(e))}}
+
+def retrieveEncryptionKey(keyPath):
+    try:
+        keyFile = open(str(keyPath), "r")
+
+        # Read the comment line and throw it out
+        keyFile.readline()
+        # Read the line with the key in it and save it to a variable to be returned
+        keyLine = keyFile.readline()
+        keyFile.close()
+        return {"status": "success", "payload": keyLine}
+    except Exception as e:
+        return {"status": "error", "payload": str(traceback.format_exc(e))}
+
+def decryptString(key, data):
+    try:
+        decData = key.decrypt(data)
+        return {"status": "success", "payload": decData}
+    except Exception as e:
+        return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
+
+def checkAdminRights():
+    import ctypes
+    import os
+
+    try:
+        # Check admin rights on Unix
+        isAdmin = os.getuid()
+        if isAdmin == 0:
+            return {"status": "success", "payload": True}
+        else:
+            return {"status": "failure", "payload": False}
+    except AttributeError:
+        # Check admin rights Windows
+        isAdmin = ctypes.windll.shell32.IsUserAnAdmin()
+        if isAdmin:
+            return {"status": "success", "payload": True}
+        else:
+            return {"status": "failure", "payload": False}
+
+
+

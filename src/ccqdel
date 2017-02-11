@@ -33,7 +33,7 @@ ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.log")
 def ccqdel():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud
     parser = argparse.ArgumentParser(description="A utility that allows you to delete/kill jobs that have been submitted using the ccqsub command.")
-    parser.add_argument('-V', '--version', action='version', version='ccqdel (version 0.3)')
+    parser.add_argument('-V', '--version', action='version', version='ccqdel (version 0.1)')
     parser.add_argument('-j', '-j', help="The job Id of the job you want to delete/kill.", required=True)
     parser.add_argument('-f', '--f', action='store_true', help="Force kill/purge the job from the Scheduler.")
     parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline.", default="1")
