@@ -1,3 +1,4 @@
+#!/usr/bin/python2.7
 # This file is part of CCQHub.
 
 # CCQHub is free software: you can redistribute it and/or modify
@@ -34,70 +35,48 @@ def ccqsub():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud
     parser = argparse.ArgumentParser(description="A wrapper for common schedulers such as Torque, SGE, Condor, and SLURM. Gives the schedulers autoscaling capability within the Amazon Cloud. When a user submits a job using this script, the job script will be parsed, the number of instances needed determined, and the instances will be launched for the job at run-time. Commands that are specified in the job script take precedence over the options specified on the command line. These commands can be denoted inside of the jobscript itself by using the #CC directive. The commands that are available through the #CC directive are -it (instance type), -nt (network type), -ni (number of instances requested), -op (optimization type), -p (criteria priority), -cpu (number of CPUs requested), -mem (amount of memory in MB requested), -s (scheduler to use), -st (scheduler type), -jn (job name), -vt (volume type), -us (use spot), -sp (spot price). ccqsub will also try to create a generic submit script for the scheduler you are using if you do not specify a job script. The output files from the job will appear in the CloudyCluster user's home directory on the instance the job was submitted from by default if you are using a CloudyCluster instance to submit your files. However there may be a minute or two delay from when the job finishes to when the files appear on the machine the job was submitted from due to extra processing needed. If you submit from a host outside of CloudyCluster the output files will be stored in the CloudyCluster user's home directory on the Access Instance associated with the Cluster that the job was submitted to. This behavior can be changed by specifying the -o and -e PBS directives in your job scripts or using the -o and -e ccqsub command line arguments, these tell the scheduler to output the files to the directories specified inside of the job script instead of the defaults. If an output file is missing check the /opt/CloudyCluster/ccqsub/undeliveredJobOutput/<CloudyCluster_user_name> directory on the Scheduler the job was submitted on as this is the default directory for undeliverable job output files.")
 
-    parser.add_argument('-V', action='version', version='ccqsub (version 0.1)')
+    parser.add_argument('-V', action='version', version='ccqsub (version 0.3)')
 
-    #For use with app and ssh keys
+    # For use with app and ssh keys
     parser.add_argument('-i', '-i', help="The path to the file containing the app/ssh key for use when validating the user on the requested resources.", default=None)
 
-    #If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
-    #Job script file location
+    # If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
+    # Job script file location
     parser.add_argument('-js', metavar='<job_script_location>', help="The path to the job script file that you want to submit to the scheduler.", default=None, required=True)
-    #Job Name
+    # Job Name
     parser.add_argument('-jn', metavar='<job_name>', help="The name of the job that will be saved so you can resubmit the job later without having to resubmit the job script itself.", default=None)
-    # #Network Type Requested
+    # Network Type Requested
     parser.add_argument('-nt', metavar='low|moderate|high|10GB', help="Specifies the amount of network capacity needed for the job. If not specified it defaults to \"default\" which means it will not factor into the calculation of instance type needed for the job.", default="default", choices=["low", "moderate", "high", "10GB"])
-    # #Number of total instances wanted
+    # Number of total instances wanted
     parser.add_argument('-ni', metavar='<number_instances>', type=int, help="The number of instances that you want the job to run on. The default setting is 1 instance.", default=1)
-    # #Number of CPUs per instance
+    # Number of CPUs per instance
     parser.add_argument('-cpu', metavar='<cpu_count>', type=int, help="The number of CPUs that you want per instance that your job is running on. The default setting is 1 CPU per instance.", default=1)
-    # #Memory Per Instance
+    # Memory Per Instance
     parser.add_argument('-mem', metavar='<mem_size_in_MB>', type=int, help="The amount of memory (in MB) per instance. The default setting is 1000 MB (1GB) per instance.", default=1000)
-    #Scheduler To use
+    # Scheduler To use
     parser.add_argument('-s', metavar='<name_of_scheduler_to_use>', help="Specifies the name of the Scheduler that you want to use. The default value is to use the default Scheduler for the Scheduler type you have requested. This default variable can be set using the ccq.config file with the variable defaultScheduler=<schedulerName>.", default="default")
-    #Scheduler Type
+    # Scheduler Type
     parser.add_argument('-st', metavar='Torque|Condor|SGE|SLURM|default', help="Specifies the type of Scheduler that you want to use. The accepted values are Torque, Condor, SGE, and SLURM. If the Scheduler type is not specified with a job script then ccqsub will attempt to figure out from the job script what type of Scheduler the job is to be run on. If no job script is submitted then the value will default to the default Scheduler for the Cluster", default="default", choices=["Torque", "Condor", "SGE", "SLURM", "default"])
-    #Use Spot Instances
+    # Use Spot Instances
     parser.add_argument('-us', metavar='yes|no', help="Use spot instances instead of dedicated instances. The default option is \"no\"", default="no", choices=["yes", "no"])
-    #Spot Instance Price
+    # Spot Instance Price
     parser.add_argument('-sp', metavar='<target_spot_price>', help="The targeted spot instance price that you will be willing to pay to run the instances. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0. This argument must be specified if using spot instances.", default=None)
-    #Instance type
+    # Instance type
     parser.add_argument('-it', metavar='<instance_type>', help="Specifies the Amazon EC2 instance type that the job is to be run on. If no instance type is specified, then the amount of RAM and CPUs will be used to determine an appropriate Amazon EC2 Instance. A default instance type can be set using the \"defaultInstanceType\" directive in the ccq Config file.", default="default")
     # Instance Type Optimization
     parser.add_argument('-op', metavar='cost|performance', help="Specifies whether to use the instance type that is most cost effective or one that will give better performance regardless of cost. The default is \"cost\".", default="cost", choices=["cost", "performance"])
-    # #Criteria Priority
+    # Criteria Priority
     parser.add_argument('-p', metavar='mcn|mnc|cmn|cnm|ncm|nmc', help="Specifies the priority that is considered when calculating the appropriate instance type for the job. Where m = memory, n = network, and c = cpu. For example specifying \"-p ncm\" would mean that when calculating the instance type the priority is Network requirements, Cpu requirements, then Memory requirements. This means that Networking is considered first, then the number of Cps, then the amount of memory when choosing an instance type. The default is \"mcn\" or Memory, Cpus, and then Network.", default="mcn", choices=["mcn", "mnc", "cmn", "cnm", "ncm", "nmc"])
     # Volume Type of Instance
     parser.add_argument('-vt', metavar='magnetic|ssd', help="Specifies the type of Volume to launch the instances for the job on. The default is \"ssd\". This value can also be set using the volumeType=<volumeType> variable in the ccq.config file.", default="ssd", choices=["magnetic", "ssd"])
     # Certificate Valid Time
     parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline.", default="1")
-    # #Check Pricing
+    # Check Pricing
     parser.add_argument('-pr', action='store_true', help="Specifies that ccq should print the estimated price for a specific job script but not run the job. No resources will be launched and the estimated price of the job will be shown. This only includes in the instance costs per hour.")
-    # #Queue to run job in
-    # parser.add_argument('-q', metavar='<queue_name>', help="The queue that you want to submit your job to. The default setting is the scheduler's default queue", default='default')
-    # Amount of wall time specified
-    # parser.add_argument('-wt', metavar='<wall_time_limit>', help="The maximum amount of time that the job will be allowed to run. The format is: hh:mm:ss, and the default max time is 01:00:00 (1 hour)", default="01:00:00")
-    #Location of file to write stdout to
+    # Location of file to write stdout to
     parser.add_argument('-o', metavar='<stdout_file_location>', help="The path to the file where you want the Standard Output from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
-    #Location of file to write stderr to
+    # Location of file to write stderr to
     parser.add_argument('-e', metavar='<stderr_file_location>', help="The path to the file where you want the Standard Error from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
-    # #Combine stderr and stdout
-    # parser.add_argument('-j', metavar='yes|no', help="Join the Standard Error and Standard Output into a single file. This single file will be the same file that the Standard Output would normally go ot. The format is yes|no and the default value is no.", default="no", choices=['yes', 'no'])
-    # #Copy Environment
-    # parser.add_argument('-ce', metavar='yes|no', help="Copy the current user environment to the instances when running the job. The format is yes|no and the default value is no.", default='no', choices=['yes', 'no'])
-    # #Event Notifications
-    # parser.add_argument('-m', metavar='a|b|e', help="Defines the set of conditions under which the execution server will send a mail message about the job. Accepted values are 'a', 'b', 'e'. The default values is mail is 'a'.", default='a', choices=['a', 'b', 'e'])
-    # #Mailing Address
-    # parser.add_argument('-M', metavar='<user@address>', help="Declares the list of users to whom mail is sent by the execution server when it sends mail about the job. The user_list argument is of the form: user[@host][,user[@host],...] If unset, the list defaults to the submitting user i.e. the job owner.", default='default')
-    # #Job re-runable
-    # parser.add_argument('-r', metavar='y|n', help="Declares whether the job is re-runable. The option argument is a single character, either y or n. If the argument is \"y\", the job is re-runable. If the argument is \"n\", the job is not re-runable. The default value is y, re-runable.", default='y' , choices=['y', 'n'])
-    # #Account To Charge
-    # parser.add_argument('-acct', metavar='<account_string>', help="Defines the account string associated with the job. The account_string is an undefined string of characters and is interpreted by the server which executes the job. This can be useful for billing purposes. The default value is None.", default="default")
-    # #Begin Time
-    # parser.add_argument('-bt', metavar='<begin_time>', help="Declares the time after which the job is eligible for execution. The date_time argument is in the form: [[[[CC]YY]MM]DD]hhmm[.SS] where CC is the first two digits of the year (the century), YY is the second two digits of the year, MM is the two digits for the month, DD is the day of the month, hh is the hour, mm is the minute, and the optional SS is the seconds. If the month (MM) is not specified, it will default to the current month if the specified day (DD) is in the future. Otherwise, the month will be set to next month. Likewise, if the day (DD) is not specified, it will default to today if the time (hhmm) is in the future. Otherwise, the day will be set to tomorrow. For example, if you submit a job at 11:15 am with a time of -a 1110, the job will be eligible to run at 11:10 am tomorrow.", default="default")
-    # #Job arrays
-    # parser.add_argument('-ja', metavar='<job_array_spec>', help="Specifies the task ids of a job array. Single task arrays are allowed. The default value is None", default="default")
-    # #Path to executable
-    # parser.add_argument('-exe', metavar='<path_to_executable_to_run>', help="Specifies the path to the executable to run. This option is specified if the user cannot create a job script. ccqsub will attempt to create a simple job script from the other command line arguments specified. This parameter is optional and will default to None", default=None)
 
     args = parser.parse_args()
 
@@ -117,22 +96,9 @@ def ccqsub():
     volumeType = args.vt
     certLength = args.cl
     justPrice = args.pr
-    appKeyLocation = args.i
 
-
-    #For later on when we want to automatically generate job script
-    # wallTimeRequested = args.wt
     stdoutFileLocation = args.o
     stderrFileLocation = args.e
-    # combineStderrAndStdout = args.j
-    # copyEnvironment = args.ce
-    # eventNotification = args.m
-    # mailingAddress = args.M
-    # jobRerunable = args.r
-    # accountToCharge = args.acct
-    # jobBeginTime = args.bt
-    # jobArrays = args.ja
-    # pathToExecutable = args.exe
 
     controlNodeIpAddress = ""
 
@@ -194,13 +160,7 @@ def ccqsub():
     else:
         print "In this version of ccqsub you must submit a job script using the -js argument in order to submit a job. Please create a job script and submit your job again.\n"
         sys.exit(0)
-        #This will be for when we don't specify that the user has to submit a job script (probably v2)
-        # print "No job script location was specified, ccqsub will read the ccqsub/job arguments from the commandline!"
-        # ccOptionsParsed = {"numberOfInstancesRequested": str(numberOfInstancesRequested),  "numCpusRequested": str(numCpusRequested), "wallTimeRequested": str(wallTimeRequested),
-        #                         "stdoutFileLocation": str(stdoutFileLocation), "stderrFileLocation": str(stderrFileLocation), "combineStderrAndStdout": str(combineStderrAndStdout), "copyEnvironment": str(copyEnvironment),
-        #                         "eventNotification": str(eventNotification), "mailingAddress": str(mailingAddress), "jobRerunable": str(jobRerunable), "memoryRequested": str(memoryRequested), "accountToCharge": str(accountToCharge),
-        #                         "jobBeginTime": str(jobBeginTime), "jobArrays": str(jobArrays), "requestedInstanceType": str(requestedInstanceType), "networkTypeRequested": str(networkTypeRequested), "optimizationChoice": str(optimizationChoice),
-        #                         "pathToExecutable": str(pathToExecutable), "criteriaPriority": str(criteriaPriority), "schedulerToUse": str(schedulerToUse), "schedType": str(schedType)}
+
     jobScriptText = ""
 
     if jobScriptLocation is not None or jobScriptLocation != "None":
@@ -256,7 +216,7 @@ def ccqsub():
                 elif line[:7] == "#SBATCH":
                     slurmLineCount += 1
                     possibleCommands = ["-o", "-e", "-D", "--ntasks-per-node", "--mem", "-N", "--nodes"]
-                    argumentNames = {"-o": "stdoutFileLocation", "--output": "stdoutFileLocation", "-e": "stderrFileLocation", "--error": "stderrFileLocation", "-D": "jobWorkDir", "--ntasks-per-node": "numCpusRequested", "--mem": "memoryRequested", "-N": "numberOfInstancesRequested", "--nodes": "numberOfInstancesRequested", "--workdir": "--workdir" }
+                    argumentNames = {"-o": "stdoutFileLocation", "--output": "stdoutFileLocation", "-e": "stderrFileLocation", "--error": "stderrFileLocation", "-D": "jobWorkDir", "--ntasks-per-node": "numCpusRequested", "--mem": "memoryRequested", "-N": "numberOfInstancesRequested", "--nodes": "numberOfInstancesRequested", "--workdir": "--workdir"}
                     splitLine = line.split(' ')
                     for command in possibleCommands:
                         if len(splitLine) > 1:
@@ -376,18 +336,15 @@ def ccqsub():
             pass
             #logFile.write("Unable to read values from the ccq certificate file. Reverting to username/password for authentication.\n")
 
-    #Check to see if the user has an API key, if so open the file and read in the key.
-    appKey = ""
+    #Check to see if the user has an API key or not
     try:
-        appKeyFile = open(str(appKeyLocation), "r")
-        for line in appKeyFile:
-            appKey += line
+        ccAccessKey = os.environ["CC_ACCESS_KEY"]
     except KeyError:
-       appKey = None
+       ccAccessKey = None
 
     if not validUser:
         while attempts < 5 and not validUser:
-            if not isCert and appKey is None:
+            if not isCert and ccAccessKey is None:
                 userName = raw_input("Please enter your username: \n")
                 password = getpass.getpass("Please enter your password: \n")
                 encodedPassword = encodeString("ccqpwdfrval", str(password))
@@ -395,7 +352,7 @@ def ccqsub():
                 valKey = "unpw"
 
             url = "https://" + str(submitHost) + "/srv/ccqsub"
-            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(appKey)}
+            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey" : str(ccAccessKey)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)
@@ -409,7 +366,7 @@ def ccqsub():
                         attempts += 1
                     else:
                         isCert = False
-                        appKey = None
+                        ccAccessKey = None
                 elif res['status'] == "error":
                     #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
                     print res['payload']['message'] + "\n\n"

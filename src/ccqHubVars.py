@@ -23,8 +23,6 @@ import ConfigParser
 
 global ccqHubConfigFileLocation
 
-global ccqHubDBLocation
-
 global ccqHubLookupDBName
 
 global ccqHubObjectDBName
@@ -33,56 +31,73 @@ global ccqHubDBLock
 
 global databaseType
 
+global ccqHubPrefix
+
 
 def init():
     global ccqHubConfigFileLocation
-    global ccqHubDBLocation
     global ccqHubDBLock
     global ccqHubLookupDBName
     global ccqHubObjectDBName
     global databaseType
+    global ccqHubPrefix
 
     parser = ConfigParser.ConfigParser()
 
     # Check to see if the user has defined their own config file in their home directory
-    if os.path.isfile(str(os.path.expanduser('~')) + str("/ccqHub.config")):
-        ccqHubConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
+    if os.path.isfile("../ccqHub.conf"):
+        ccqHubConfigFileLocation = "../ccqHub.conf"
         try:
             parser.read(ccqHubConfigFileLocation)
             try:
-                parser.get("Database", "databaseType")
-                parser.get("Database", "lookupTableName")
-                parser.get("Database", "objectTableName")
+                databaseType = parser.get("Database", "databaseType")
+                ccqHubLookupDBName = parser.get("Database", "lookupTableName")
+                ccqHubObjectDBName = parser.get("Database", "objectTableName")
+                ccqHubPrefix = parser.get("General", "ccqHubPrefix")
             except Exception as e:
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
                 databaseType = "sqlite3"
+                ccqHubPrefix = None
 
         except Exception as e:
             print traceback.format_exc(e)
             print "Unable to read ccqHub configuration file, the file may have been removed or corrupted."
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
-            databaseType = "sqlite3"
+            ccqHubPrefix = None
 
-    # If the user doesn't have a config file in their home directory use the global one in /opt/ccqHub
-    elif os.path.isfile("/opt/ccqHub/ccqHub.config"):
-        ccqHubConfigFileLocation = str("/opt/ccqHub/ccqHub.config")
+def initInstaller(prefix):
+    global ccqHubConfigFileLocation
+    global ccqHubDBLock
+    global ccqHubLookupDBName
+    global ccqHubObjectDBName
+    global databaseType
+    global ccqHubPrefix
+
+    parser = ConfigParser.ConfigParser()
+
+    # Check to see if the user has defined their own config file in their home directory
+    if os.path.isfile(str(prefix) + "/ccqHub.conf"):
+        ccqHubConfigFileLocation = str(prefix) + "/ccqHub.conf"
         try:
             parser.read(ccqHubConfigFileLocation)
             try:
-                parser.get("Database", "databaseType")
-                parser.get("Database", "lookupTableName")
-                parser.get("Database", "objectTableName")
+                databaseType = parser.get("Database", "databaseType")
+                ccqHubLookupDBName = parser.get("Database", "lookupTableName")
+                ccqHubObjectDBName = parser.get("Database", "objectTableName")
+                ccqHubPrefix = parser.get("General", "ccqHubPrefix")
             except Exception as e:
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
                 databaseType = "sqlite3"
+                ccqHubPrefix = None
+
         except Exception as e:
+            print traceback.format_exc(e)
+            print "Unable to read ccqHub configuration file, the file may have been removed or corrupted."
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
-            databaseType = "sqlite3"
-    else:
-        print "Unable to find a configuration file for ccqHub. Exiting now"
+            ccqHubPrefix = None

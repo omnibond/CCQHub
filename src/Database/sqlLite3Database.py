@@ -68,7 +68,7 @@ class sqlLite3Database(Database):
                             data = cursor.fetchall()
                         else:
                             tableConn.close()
-                            return {"status": "error", "message": "Database filter is not supported: " + str(filter)}
+                            return {"status": "error", "payload": {"error": "Database filter is not supported: " + str(filter), "traceback": traceback.format_stack()}}
 
                     # Close connection to lookup table
                     tableConn.close()
@@ -96,6 +96,7 @@ class sqlLite3Database(Database):
                                         item[key] = value
                                 returnArr.append(item)
                             except Exception as e:
+                                print "Encountered an exception: " + str(traceback.format_exc(e))
                                 pass
                         tableConn.close()
 
@@ -109,28 +110,27 @@ class sqlLite3Database(Database):
                 cursor = tableConn.cursor()
                 with ccqHubVars.ccqHubDBLock:
                     searchKey = (str(key),)
-                    cursor.execute("SELECT * FROM ccqHubLookup WHERE hash_key=?", searchKey)
+                    cursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", searchKey)
                     dbObject = cursor.fetchall()
                     item = {}
                     for itemData in dbObject:
-                        item['hash_key'] = itemData[0]
-                        meta_var = itemData[1]
+                        item['hash_key'] = itemData['hash_key']
+                        meta_var = itemData['meta_var']
                         meta_var_object = json.loads(meta_var)
                         # Add each item in the meta_var_object to the return object to make it compatible with current ccq structure
                         for key, value in meta_var_object.items():
                             item[key] = value
-                        item['jobScriptText'] = itemData[2]
-                        item['sharingObj'] = itemData[3]
+                        item['jobScriptText'] = itemData['jobScriptText']
+                        item['sharingObj'] = itemData['sharingObj']
                     returnArr.append(item)
                     tableConn.close()
         else:
-            return {"status": "error", "message": "Action not supported"}
+            return {"status": "error", "payload": {"error": "Action not supported", "traceback": traceback.format_stack()}}
 
         return {"status": "success", "payload": returnArr}
 
-    def handleObj(self, obj):
-        action = obj['action']
-        baseObj = obj['obj']
+    def handleObj(self, action, obj):
+        baseObj = obj
 
         #Get a connection to both tables to be passed into the other functions
         lookupTableConnInfo = self.tableConnect(ccqHubVars.ccqHubLookupDBName)
@@ -207,7 +207,7 @@ class sqlLite3Database(Database):
             else:
                 lookupTableConn.close()
                 objectTableConn.close()
-                return {"status": "error", "payload": "Unsupported action passed to handleObj: " + str(action) + ". The supported actions are delete, create, and modify."}
+                return {"status": "error", "payload": {"error": "Unsupported action passed to handleObj: " + str(action) + ". The supported actions are delete, create, and modify.", "traceback": traceback.format_stack()}}
 
     def addObj(self, obj, objectTableConnection):
         hash_key = obj['name']
@@ -233,13 +233,13 @@ class sqlLite3Database(Database):
                 meta_var[x] = str(obj[x])
         try:
             cursor = objectTableConnection.cursor()
-            data = (str(hash_key), str(meta_var), str(jobScriptText), str(sharingObject))
-            cursor.execute("INSERT INTO ccqHubLookup VALUES (?, ?, ?, ?)", data)
+            data = (str(hash_key), json.dumps(meta_var), str(jobScriptText), json.dumps(sharingObject))
+            cursor.execute("INSERT INTO ccqHubObject VALUES (?, ?, ?, ?)", data)
             objectTableConnection.commit()
+            return {"status": "success", "payload": "Successfully added  the object"}
         except Exception as e:
             print traceback.format_exc(e)
             return {"status": "error", "payload": {"error": "There was a problem trying to delete the object: " + str(hash_key), "traceback": traceback.format_exc(e)}}
-        return {"status": "error", "payload": "Base Scheduler Class Not Called Error In: addObj"}
 
     def deleteObj(self, obj, objectTableConnection):
         hash_key = obj['name']
@@ -306,24 +306,24 @@ class sqlLite3Database(Database):
 
     def createTable(self, tableName):
         try:
-            conn = sqlite3.connect(str(ccqHubVars.ccqHubDBLocation) + str(tableName) + ".db")
+            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db")
             c = conn.cursor()
             if "lookup" in str(tableName).lower():
                 c.execute("CREATE TABLE ccqHubLookup (hash_key, range_key, objectID)")
             elif "object" in str(tableName).lower():
-                c.execute("CREATE TABLE ccqHubObject (hash_key, meta_var, jobScriptText sharingObj)")
+                c.execute("CREATE TABLE ccqHubObject (hash_key, meta_var, jobScriptText, sharingObj)")
             else:
                 return {"status": "error", "payload": "Unsupported table name format"}
             conn.commit()
             conn.close()
             return {"status": "success", "payload": "Successfully created table " + str(tableName)}
         except Exception as e:
-            return {"status": "success", "payload": {"error": "There was a problem trying to create the table.", "traceback": traceback.format_exc(e)}}
+            return {"status": "error", "payload": {"error": "There was a problem trying to create the table.", "traceback": traceback.format_exc(e)}}
 
     def tableConnect(self, tableName):
         try:
-            conn = sqlite3.connect(ccqHubVars.ccqHubDBLocation + str(tableName))
+            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db")
             return {"status": "success", "payload": conn}
         except Exception as e:
-            print "There was a problem trying to connect to the local sqlite3 database: " + str(ccqHubVars.ccqHubDBLocation + str(tableName))
+            print "There was a problem trying to connect to the local sqlite3 database: " + str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db"
             return {"status": "error", "payload": {"error": "There was a problem trying to connect to the local sqlite3 database", "traceback": traceback.format_exc(e)}}

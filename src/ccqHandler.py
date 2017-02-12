@@ -612,6 +612,120 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
         return {'status': 'error', 'payload': {"error": "Error: "+str(e), "traceback": ''.join(traceback.format_exc(e))}}
 
 
+def copyJobOutputFilesToSpecifiedLocation(job):
+    storedPassword = ""
+    accessInstanceName = ""
+    res = ClusterMethods.queryObject(None, "RecType-Collaborator-userName-" + str(job['userName']), "query", "json")
+    if res['status'] == "success":
+        results = res['payload']
+        for item in results:
+            res = encryptionFunctions.decryptString(item['password'])
+            if res['status'] == "success":
+                storedPassword = res['payload']['string']
+            else:
+                print "Unable to decrypt the password from the Collaborator!"
+            break
+
+    try:
+        batchHost = job['batchHost']
+        if batchHost is not None:
+            #Slurm does not copy the output files to where the job was submitted, but since Torque does this, we need to
+            #keep the behavior similar between the two so we need to ssh into the batch host node and get the output files
+            #for the job and transfer them to the scheduler.
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(str(batchHost), username=job['userName'], password=str(storedPassword), timeout=15)
+                sftp = ssh.open_sftp()
+                #Copy the job from the stdoutFileLocation and stderrFileLocation to the standard location used by ccq for
+                #transfer to the directory the user called ccqsub from.
+                sftp.get(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o", str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o")
+                sftp.get(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e", str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e")
+                sftp.close()
+                ssh.close()
+            except Exception as e:
+                print "Unable to transfer the output files from " + str(batchHost) + "! Due to the following exception: "
+                print traceback.format_exc(e)
+                print "\n\n"
+                return {"status": "error", "payload": "There was an error transferring the job output files."}
+
+    except KeyError as e:
+        pass
+
+    #By default the files get transferred into the directory where the job was submitted if no special output location is specified
+    #Make sure the file has been transferred before attempting to copy it
+    time.sleep(30)
+    #If the job was submitted remotely (not from a CC instance) then the job output will be transferred to the user's
+    #home directory on the login instance for easy access and storage"
+    if job['isRemoteSubmit'] == "True":
+        #Get Access Instance IP Address:
+        results = ClusterMethods.queryObject(None, "RecType-WebDav-clusterName-" + str(job['schedClusterName']), "query", "dict", "beginsWith")
+        if results['status'] == "success":
+            results = results['payload']
+        else:
+            print "Error trying to obtain the Access Instance to transfer the files from!"
+            return {"status": "error", "payload": "Error trying to obtain the Access Instance to transfer the files from."}
+
+        for item in results:
+            accessInstanceName = item["accessName"]
+
+        if accessInstanceName != "":
+            ccqsubMethods.updateJobInDB({"accessInstanceResultsStoredOn": str(accessInstanceName)}, job['name'])
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(str(accessInstanceName), username=job['userName'], password=str(storedPassword), timeout=15)
+                sftp = ssh.open_sftp()
+                sftp.put(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o", "/home/" + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o")
+                sftp.put(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e", "/home/" + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e")
+                sftp.close()
+                ssh.close()
+                #os.system("rm -rf " + str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e " + str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o")
+            except Exception as e:
+                print "Unable to transfer the output files from the job: " + str(job['name']) + " to " + str(accessInstanceName) + " ! Due to the following exception: "
+                print traceback.format_exc(e)
+                print "\n\n"
+                return {"status": "error", "payload": "There was an error transferring the job output files."}
+        else:
+            print "Unable to get an Access Instance to copy the results too! Results will stay on the scheduler where the job was submitted!"
+    else:
+        #Use the submitHostInstanceId parameter to get the IP of the instance to send the information too!
+        ipToSendTo = ""
+        items = ClusterMethods.queryObject(None, str(job['submitHostInstanceId']), "get", "dict")
+        if items['status'] == "success":
+            items = items['payload']
+
+        for instance in items:
+            ipToSendTo = instance['instanceIP']
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(str(ipToSendTo), username=job['userName'], password=str(storedPassword), timeout=15)
+            sftp = ssh.open_sftp()
+
+            if str(job["stdoutFileLocation"]) == "default":
+                stdoutFileLocation = str(job['jobWorkDir']) + "/" + str(job['jobName']) + str(job['name']) + ".o"
+            else:
+                stdoutFileLocation = job["stdoutFileLocation"]
+            if str(job["stderrFileLocation"]) == "default":
+                stderrFileLocation = str(job['jobWorkDir']) + "/" + str(job['jobName']) + str(job['name']) + ".e"
+            else:
+                stderrFileLocation = job["stderrFileLocation"]
+
+            #Put the job output files in the directory where the ccqsub command was ran from on the instance that invoked the call
+            sftp.put(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o", stdoutFileLocation)
+            sftp.put(str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e", stderrFileLocation)
+            sftp.close()
+            ssh.close()
+            os.system("rm -rf " + str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".e " + str(tempJobOutputLocation) + str(job['userName']) + "/" + str(job['jobName']) + str(job['name']) + ".o")
+            return {"status": "success", "payload": "Output files successfully transferred."}
+        except Exception as e:
+            print "Unable to transfer the output files from the job: " + str(job['name']) + " to " + str(ipToSendTo) + " ! Due to the following exception: "
+            print traceback.format_exc(e)
+            print "\n\n"
+            return {"status": "error", "payload": "There was an error transferring the job output files."}
+
+
 def delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName):
     print "The timestamp when starting delegateTasks is: " + str(time.time())
     listOfJobsToProcess = {}

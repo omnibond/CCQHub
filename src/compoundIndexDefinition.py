@@ -28,5 +28,8 @@ def returnCompoundIndexDefinition():
         {"Job": [
             "userName",
             "name"
+        ]},
+        {"APIKeys": [
+            "name"
         ]}
     ]

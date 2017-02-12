@@ -1,4 +1,3 @@
-
 #!/usr/bin/python2.7
 #Copyright Omnibond Systems, LLC. All rights reserved.
 
@@ -17,53 +16,54 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 import commands
-
-import ccqHubMethods
 import argparse
 import os
 import sys
+import ConfigParser
+import threading
 
 
 def main():
     # Create the DB Interface to allow DB interaction
     #TODO This is going to change just not sure exactly how best to change it at the moment
-    sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
+    sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/src"))
+    sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/src/Database"))
     from sqlLite3Database import sqlLite3Database
+    import ccqHubMethods
+    import ccqHubVars
 
     defaultPrefix = "/etc/ccqHub"
 
     dbInterface = sqlLite3Database()
 
-    parser = argparse.ArgumentParser(description="Setup utility for ccqHub that generates an encryption key for the ccqHub instance to use and performs the initial setup of the ccqHub DBs.")
-    parser.add_argument('-V', '--version', action='version', version='ccqHubSetup (version 0.1)')
-    parser.add_argument('-nr', '--nr', action='store_true', help="Specifies that ccqHub should be run with non-root privileges. This is not recommended for data security and privacy reasons.")
+    parser = argparse.ArgumentParser(description="Installation utility for ccqHub. This utility will install ccqHub to the desired location, create the database backend, and generate the encryption key used by ccqHub.")
+    parser.add_argument('-V', '--version', action='version', version='ccqHubInstaller (version 0.1)')
+    parser.add_argument('-nr', '--nr', action='store_true', help="Specifies that ccqHub should be installed with non-root privileges. This is not recommended for data security and privacy reasons.")
     parser.add_argument('-p', "--prefix", help="The location that you would like ccqHub to installed to, if running in non-root mode this argument is required. If running in root mode this argument is optional with the default install going to /etc/ccqHub", default=None)
-    parser.add_argument('-kp', '--keyPath', help="The location to store the ccqHub encryption key on the machine. The path should only be readable/writable by root if running as root (most secure) or only readable/writeable by the user running this command (non-root mode). The default location is {{ prefix }}/.key if the path is not specified.", default=".keys")
     parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3")
-
 
     args = parser.parse_args()
 
     nonRoot = args.nr
     prefix = args.prefix
-    keyPath = args.keyPath
+    databaseType = args.databaseType
 
     if not nonRoot:
         values = ccqHubMethods.checkAdminRights()
         if values['status'] != "success":
-            print "You are not running with root permissions. It is advised that ccqHub be run with root permissions in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub."
+            print "You are not running with root permissions. It is advised that ccqHub be installed with root permissions in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub."
             sys.exit(0)
         if prefix is None:
             prefix = defaultPrefix
     else:
         if prefix is None:
-            print "You must specify a prefix when running ccqHub in non-root mode. Please try again and specify a prefix using the -p argument."
+            print "You must specify a prefix when installing ccqHub in non-root mode. Please try again and specify a prefix using the -p argument."
             sys.exit(0)
 
     # Check to see if the ccqHub directory exists or not, if it does not create it.
     if not os.path.isdir(str(prefix)):
         print "Prefix directory not found, attempting to create the directory " + str(prefix) + " now."
-        status, output = commands.getstatusoutput("mkdir " + str(prefix))
+        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src")
         if int(status) != 0:
             # Creation of the directory failed print the output and exit
             print "There was an error trying to create the directory. The error message is: " + str(output)
@@ -71,7 +71,7 @@ def main():
         else:
             print "Successfully created the new ccqHub directory: " + str(prefix)
     else:
-        print "The prefix directory specified already exists, if you continue this may render the current ccqHub installation inoperable."
+        print "The prefix directory specified already exists, if you continue this will replace the current ccqHub installation and the old data will be deleted (if you have permission to do so)."
         print "Continue (y or n)?"
         completed = False
         continueChoice = ""
@@ -84,15 +84,54 @@ def main():
 
         if continueChoice == "n":
             sys.exit()
+        else:
+            status, output = commands.getstatusoutput("rm -rf " + str(prefix))
+            if int(status) != 0:
+                # Creation of the directory failed print the output and exit
+                print "There was an error remove the old ccqHub directory. The error message is: " + str(output)
+                sys.exit(0)
+            else:
+                status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src")
+                if int(status) != 0:
+                    # Creation of the directory failed print the output and exit
+                    print "There was an error trying to create the directory. The error message is: " + str(output)
+                    sys.exit(0)
+
+    # Install ccqHub to the specified directory:
+    status, output = commands.getstatusoutput("cp -R src/ " + str(prefix) + "/src")
+    if int(status) != 0:
+        # Installation of ccqHub failed print the error and exit
+        print "The ccqHub installation failed. The error message is: " + str(output)
+        sys.exit(0)
+    else:
+        print "Successfully installed ccqHub to the directory: " + str(prefix)
 
     #Create the Databases for ccqHub to use
-    dbInterface = sqlLite3Database()
     tableNameResults = dbInterface.generateTableNames()
     if tableNameResults['status'] != "success":
         print tableNameResults['payload']
     else:
         lookupTableName = tableNameResults['payload']['lookupTableName']
         objectTableName = tableNameResults['payload']['objectTableName']
+
+        conigFile = open(str(prefix) + "/ccqHub.conf", "w")
+        parser = ConfigParser.ConfigParser()
+
+        # Generate new ccqHub config file that will contain the names of the database tables and other useful information
+        parser.add_section('Database')
+        parser.set('Database', 'databaseType', databaseType)
+        parser.set('Database', 'lookupTableName', lookupTableName)
+        parser.set('Database', 'objectTableName', objectTableName)
+
+        parser.add_section('General')
+        parser.set('General', 'ccqHubPrefix', str(prefix))
+
+        parser.write(conigFile)
+        conigFile.close()
+
+        # Init the ccqVars global variables that contain information required to create the tables
+        ccqHubVars.initInstaller(prefix)
+        ccqHubVars.ccqHubDBLock = threading.RLock()
 
         lookupTableCreationResults = dbInterface.createTable(lookupTableName)
         if lookupTableCreationResults['status'] != "success":
@@ -104,19 +143,21 @@ def main():
             sys.exit(0)
 
     print "Generating an encryption key for the ccqHub installation."
-
-    values = ccqHubMethods.generateEncryptionKey(str(keyPath))
+    values = ccqHubMethods.generateEncryptionKey()
     if values['status'] != "success":
-       print values['payload']
+        print "Error in generateEncryptionKey"
+        print values['payload']
     else:
         # Need to write out initial object to the DB that will store the API keys for ccqHub
-        values = ccqHubMethods.writeAPIKeyObj(keyPath)
+        values = ccqHubMethods.writeAPIKeyObj()
         if values['status'] != "success":
+            print "Error in writeAPIKeyObj"
             print values['payload']
         else:
             # Need to generate an API key that must be used in order to perform ccqHub management functions
-            values = ccqHubMethods.saveAndGenUserAppKey(keyPath)
+            values = ccqHubMethods.saveAndGenUserAppKey()
             if values['status'] != "success":
+                print "Error in saveAndGenUserAppKey"
                 print values['payload']
 
 main()

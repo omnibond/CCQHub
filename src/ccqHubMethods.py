@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 import base64
+import commands
 import os
 import socket
 import sys
@@ -25,6 +26,7 @@ import json
 from random import randint
 import datetime
 from datetime import timedelta
+import ccqHubVars
 
 # sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 # from Slurm import SlurmScheduler
@@ -37,6 +39,9 @@ from sqlLite3Database import sqlLite3Database
 
 dbInterface = sqlLite3Database()
 
+ccqHubKeyDir = "/.keys"
+ccqHubKeyFile = "/.keys/ccqHub.key"
+
 
 def updateJobInDB(fieldsToAddToJob, jobId):
     #Update the job DB entry with the status of the job!
@@ -47,7 +52,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
     quit = False
     while not done:
         try:
-            results = dbInterface.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+            results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -81,7 +86,7 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
     timeElapsed = 0
     while not done:
         try:
-            results = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+            results = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -125,7 +130,7 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
 def appendSuffixToJobScriptName(jobName):
     #There are conflicting job names who's MD5 hashes do not match so here we append a number to the end of the
     #jobName in order to make it unique
-    items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -151,7 +156,7 @@ def appendSuffixToJobScriptName(jobName):
 
 def compareJobScriptsMD5s(jobName, newJobMD5):
     conflictingJobMD5 = ""
-    items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -169,7 +174,7 @@ def compareJobScriptsMD5s(jobName, newJobMD5):
 
 def checkUniqueness(typeToCompare, parameter, jobName=None):
     if typeToCompare == "jobScript":
-        items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
+        items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -182,7 +187,7 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         return {"status": "success", "payload": {"isTaken": False}}
 
     elif typeToCompare == "jobId":
-        items = dbInterface.queryObject(None, "RecType-Job-name-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObj(None, "RecType-Job-name-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -215,7 +220,7 @@ def putJobScriptInDB(obj):
         item = response['payload']
         return {"status": "success", "payload": "Successfully saved the job script to the database!"}
     else:
-        return {"status": "error", "payload": str(response['message'])}
+        return {"status": "error", "payload": str(response['payload'])}
 
 def putJobToRunInDB(obj):
     ccOptionsParsed = obj['ccOptionsCommandLine']
@@ -275,7 +280,7 @@ def putJobToRunInDB(obj):
         timeElapsed = 0
         while not done:
             try:
-                items = dbInterface.queryObject(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+                items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
                 if items['status'] == "success":
                     items = items['payload']
                 else:
@@ -294,11 +299,11 @@ def putJobToRunInDB(obj):
 
         return {"status": "success", "payload": {"jobId": str(generatedJobId)}}
     else:
-        return {"status": "error", "payload": {str(response['message'])}}
+        return {"status": "error", "payload": {str(response['payload'])}}
 
 def getSchedulerIPInformation(schedName, schedType):
     if schedName == "default":
-        items = dbInterface.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObj(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -312,7 +317,7 @@ def getSchedulerIPInformation(schedName, schedType):
                     isAutoscaling = True
                 return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP']), "clusterName": str(scheduler['clusterName']), "schedulerType": str(scheduler['schedType']), "schedName": str(scheduler['schedName']), "isAutoscaling": isAutoscaling, "instanceName": scheduler['instanceName'], "isDefaultScheduler": scheduler['defaultScheduler'], "schedulerInstanceId": scheduler["instanceID"]}}
 
-    items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
+    items = dbInterface.queryObj(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -413,7 +418,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
         schedulerInstanceName = ""
         schedulerInstanceId = ""
 
-        items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+        items = dbInterface.queryObj(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -474,7 +479,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
 
     instanceClusterName = None
 
-    items = dbInterface.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObj(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -538,7 +543,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
 
     instanceClusterName = None
 
-    items = dbInterface.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObj(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -576,7 +581,7 @@ def getControlNodeForCCInstance():
     urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
     instanceId = urlResponse.read()
 
-    items = dbInterface.queryObject(None, instanceId, "get", "dict")
+    items = dbInterface.queryObj(None, instanceId, "get", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -585,7 +590,7 @@ def getControlNodeForCCInstance():
     for item in items:
         clusterName = item['clusterName']
 
-    items = dbInterface.queryObject(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
+    items = dbInterface.queryObj(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -601,7 +606,7 @@ def getControlNodeForCCInstance():
         return {"status": "error", "payload": "There was a problem getting the ControlNode IP address!"}
 
 def getSchedulerAndSchedTypeFromJob(jobId):
-    results = dbInterface.queryObject(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+    results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
@@ -628,7 +633,7 @@ def getSchedulerAndSchedTypeFromJob(jobId):
 
 def getSchedulerIpByName(schedName):
     if schedName == "default":
-        items = dbInterface.queryObject(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
+        items = dbInterface.queryObj(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
@@ -641,7 +646,7 @@ def getSchedulerIpByName(schedName):
 
         return {'status': 'error', 'payload': "The requested default scheduler was not found in the Database!"}
 
-    items = dbInterface.queryObject(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
+    items = dbInterface.queryObj(None, "RecType-Scheduler-schedName-" + str(schedName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -706,7 +711,7 @@ def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, in
             return {"status": "success", "payload": totalPrice}
 
         except Exception as e:
-            print "There was an error trying to determin the cost of the job!"
+            print "There was an error trying to determine the cost of the job!"
             print traceback.print_exc(e)
             return {"status": "error", "payload": {"error": "There was a problem trying to calculate the cost of the job!", "traceback": str(traceback.format_exc(e))}}
 
@@ -726,20 +731,19 @@ def encodeString(k, field):
 
 def writeAPIKeyObj():
     try:
-        placeHolder = encryptionFunctions.encryptString({"string": "{\"keys\": [], \"keyPerms\": {}}"})
+        placeHolder = encryptString(json.dumps("{\"keys\": [], \"keyPerms\": {}}"))
         obj = {'action': "create", 'obj': {"RecType": "APIKeys", "name": "APIKeys"}}
 
         # Put values in the object to be saved to Database
-        for key in placeHolder['payload']:
-            obj['obj'][key] = placeHolder['payload'][key]
+        obj['obj']['string'] = placeHolder['payload']
         res = dbInterface.handleObj(**obj)
 
         if res['status'] == "success":
-            return {"status": "success", "messsage": "Successfully saved the APIKeys object"}
+            return {"status": "success", "payload": "Successfully saved the APIKeys object"}
         else:
-            return {"status": "error", "message": res['message']}
+            return {"status": "error", "payload": res['payload']}
     except Exception as ex:
-        return {"status": "error", "message": traceback.format_exc()}
+        return {"status": "error", "payload": {"error": "There was an error writing out the API Key Object to the Database", "traceback": traceback.format_exc(ex)}}
 
 def saveAndGenUserAppKey():
     import hashlib
@@ -747,12 +751,13 @@ def saveAndGenUserAppKey():
     import uuid
     try:
         dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
-        response = dbInterface.queryObject(None, "APIKeys", "get", "json")
+        response = dbInterface.queryObj(None, "APIKeys", "get", "json")
         if response['status'] == "success":
             results = response['payload']
             for tempItem in results:
-                apiKeysAndPerms = encryptionFunctions.decryptString(tempItem)
-                apiKeysAndPerms = json.loads(apiKeysAndPerms['payload']['string'])
+                apiKeysAndPerms = decryptString(tempItem['string'])
+                apiKeysAndPerms = json.loads(apiKeysAndPerms['payload'])
+                apiKeysAndPerms = json.loads(apiKeysAndPerms)
                 apiKeys = apiKeysAndPerms['keys']
                 keyPerms = apiKeysAndPerms['keyPerms']
 
@@ -766,37 +771,41 @@ def saveAndGenUserAppKey():
 
                 #Now we have to encrypt the new object and save it back to the DB
                 temp = json.dumps(apiKeysAndPerms)
-                tempObj = {"string": str(temp)}
-                placeHolder = encryptionFunctions.encryptString(tempObj)
-                for key in placeHolder['payload']:
-                    tempItem[key] = placeHolder['payload'][key]
+                #tempObj = {"string": str(temp)}
+                placeHolder = encryptString(temp)
+                tempItem= placeHolder['payload']
 
                 obj = {}
                 obj['action'] = "modify"
                 obj['obj'] = tempItem
-                #the driver does not care about the apiKey object so no event
-                event = None
-                res = dbInterface.handleObj(obj, event)
+                res = dbInterface.handleObj(**obj)
                 if res['status'] != "success":
-                    return {"status": "error", "message": res['message']}
+                    return {"status": "error", "payload": res['payload']}
 
         else:
-            return {"status": "error", "message": str(response['message'])}
+            return {"status": "error", "payload": response['payload']}
         return {"status": "success", "message": "Successfully generated and saved APIKey for ccqHub root access.", "payload": binascii.hexlify(dk)}
     except Exception as e:
-        return {"status": "error", "message": traceback.format_exc(e)}
+        return {"status": "error", "payload": {"error": "There was a problem generating the APIKey for ccqHub root access.", "traceback": traceback.format_exc(e)}}
 
-def encryptString(key, data):
+def encryptString(data):
     # Perform the actual encryption of the data utilizing the key that is provided
     try:
         from cryptography.fernet import Fernet
+
+        values = retrieveEncryptionKey()
+        if values['status'] != "success":
+            return {"status": "error", "payload": values['payload']}
+        else:
+            key = values['payload']
+
         f = Fernet(key)
         encData = f.encrypt(str(data))
         return {"status": "success", "payload": encData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem encrypting the string.", "traceback": str(traceback.format_exc(e))}}
 
-def generateEncryptionKey(keyPath):
+def generateEncryptionKey():
     # Generate the key to be used for encryption if there is not one created. This will be placed in a file that is only
     # accessible by the administrator of ccqHub and therefore cannot be run by other users since they cannot read the file
     try:
@@ -805,20 +814,35 @@ def generateEncryptionKey(keyPath):
 
         # Now that the key has been generated we need to store it in a file in a location that is only accessible by the
         # admin ccqHub user
+
+        if not os.path.isdir(str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyFile)):
+            status, output = commands.getstatusoutput("mkdir " + str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyDir))
+            if int(status) != 0:
+                # Creation of the directory failed print the output and exit
+                print "There was an error trying to create the ccqHub key directory. The error message is: " + str(output)
+                sys.exit(0)
+
         try:
-            keyFile = open(str(keyPath), "w+")
+            keyFile = open(str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyFile), "w+")
             keyFile.write("Warning changing the contents of this file may render ccqHub data inaccessible.\n")
             keyFile.write(str(key))
             keyFile.close()
+
+            status, output = commands.getstatusoutput("chmod -R 400 " + str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyDir))
+            if int(status) != 0:
+                # Creation of the directory failed print the output and exit
+                print "There was an error trying to create the ccqHub key directory. The error message is: " + str(output)
+                sys.exit(0)
+
         except Exception as e:
-            return {"status": "error", "payload": str(traceback.format_exc(e))}
+            return {"status": "error", "payload": {"error": "There was an issue writing out the keyfile.", "traceback": str(traceback.format_exc(e))}}
         return {"status": "success", "payload": key}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem generating the encryption key for ccqHub.", "traceback": str(traceback.format_exc(e))}}
 
-def retrieveEncryptionKey(keyPath):
+def retrieveEncryptionKey():
     try:
-        keyFile = open(str(keyPath), "r")
+        keyFile = open(str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyFile), "r")
 
         # Read the comment line and throw it out
         keyFile.readline()
@@ -827,12 +851,20 @@ def retrieveEncryptionKey(keyPath):
         keyFile.close()
         return {"status": "success", "payload": keyLine}
     except Exception as e:
-        return {"status": "error", "payload": str(traceback.format_exc(e))}
+        return {"status": "error", "payload": {"error": "There was a problem trying to obtain the key from the specified file.", "traceback": str(traceback.format_exc(e))}}
 
-def decryptString(key, data):
+def decryptString(data):
     try:
-        decData = key.decrypt(data)
-        return {"status": "success", "payload": decData}
+        from cryptography.fernet import Fernet
+
+        values = retrieveEncryptionKey()
+        if values['status'] != "success":
+            return {"status": "error", "payload": values['payload']}
+        else:
+            key = values['payload']
+            f = Fernet(key)
+            decData = f.decrypt(str(data))
+            return {"status": "success", "payload": decData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
 
@@ -854,6 +886,3 @@ def checkAdminRights():
             return {"status": "success", "payload": True}
         else:
             return {"status": "failure", "payload": False}
-
-
-
