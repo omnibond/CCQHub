@@ -773,7 +773,7 @@ def saveAndGenUserAppKey():
                 temp = json.dumps(apiKeysAndPerms)
                 #tempObj = {"string": str(temp)}
                 placeHolder = encryptString(temp)
-                tempItem= placeHolder['payload']
+                tempItem['string'] = placeHolder['payload']
 
                 obj = {}
                 obj['action'] = "modify"

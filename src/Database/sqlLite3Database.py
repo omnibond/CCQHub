@@ -86,7 +86,7 @@ class sqlLite3Database(Database):
                         nextCursor = tableConn.cursor()
                         for objectId in data:
                             try:
-                                nextCursor.execute("SELECT * FROM ccqHubLookup WHERE hash_key=?", objectId)
+                                nextCursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", objectId)
                                 dbObject = nextCursor.fetchall()
                                 # hash_key (string), meta_var (json object), job_script_text (string), sharingObj
                                 item = {}
@@ -210,7 +210,10 @@ class sqlLite3Database(Database):
                 return {"status": "error", "payload": {"error": "Unsupported action passed to handleObj: " + str(action) + ". The supported actions are delete, create, and modify.", "traceback": traceback.format_stack()}}
 
     def addObj(self, obj, objectTableConnection):
-        hash_key = obj['name']
+        try:
+            hash_key = obj['name']
+        except KeyError as e:
+            hash_key = obj['hash_key']
         try:
             jobScriptText = obj['jobScriptText']
         except KeyError as e:
@@ -242,10 +245,13 @@ class sqlLite3Database(Database):
             return {"status": "error", "payload": {"error": "There was a problem trying to delete the object: " + str(hash_key), "traceback": traceback.format_exc(e)}}
 
     def deleteObj(self, obj, objectTableConnection):
-        hash_key = obj['name']
+        try:
+            hash_key = obj['name']
+        except KeyError as e:
+            hash_key = obj['hash_key']
         try:
             cursor = objectTableConnection.cursor()
-            cursor.execute("DELETE FROM ccqHubLookup WHERE hash_key=?", (hash_key,))
+            cursor.execute("DELETE FROM ccqHubObject WHERE hash_key=?", (hash_key,))
             objectTableConnection.commit()
         except Exception as e:
             print traceback.format_exc(e)
@@ -255,7 +261,10 @@ class sqlLite3Database(Database):
 
     def addIndexes(self, obj, lookupTableConnection):
         RecType = obj['RecType']
-        name = obj['name']
+        try:
+            name = obj['name']
+        except KeyError as e:
+            name = obj['hash_key']
 
         indexValues = compoundIndexDefinition.returnCompoundIndexDefinition()
 
@@ -293,7 +302,10 @@ class sqlLite3Database(Database):
         return {"status": "success", "payload": "Successfully saved the indexes out"}
 
     def deleteIndexes(self, obj, lookupTableConnection):
-        name = obj['name']
+        try:
+            name = obj['name']
+        except KeyError as e:
+            name = obj['hash_key']
         try:
             cursor = lookupTableConnection.cursor()
             cursor.execute("DELETE FROM ccqHubLookup WHERE objectID=?", (name,))
