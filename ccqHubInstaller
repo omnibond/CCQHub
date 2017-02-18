@@ -27,20 +27,17 @@ def main():
     # Create the DB Interface to allow DB interaction
     #TODO This is going to change just not sure exactly how best to change it at the moment
     sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/src"))
-    sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/src/Database"))
-    from sqlLite3Database import sqlLite3Database
     import ccqHubMethods
     import ccqHubVars
+    import credentials
 
     defaultPrefix = "/opt/ccqHub"
-
-    dbInterface = sqlLite3Database()
 
     parser = argparse.ArgumentParser(description="Installation utility for ccqHub. This utility will install ccqHub to the desired location, create the database backend, and generate the encryption key used by ccqHub.")
     parser.add_argument('-V', '--version', action='version', version='ccqHubInstaller (version 0.1)')
     parser.add_argument('-nr', '--nr', action='store_true', help="Specifies that ccqHub should be installed with non-root privileges. This is not recommended for data security and privacy reasons.")
     parser.add_argument('-p', "--prefix", help="The location that you would like ccqHub to installed to, if running in non-root mode this argument is required. If running in root mode this argument is optional with the default install going to /opt/ccqHub", default=None)
-    parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3")
+    parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3", choices=["sqlite3"])
 
     args = parser.parse_args()
 
@@ -49,7 +46,7 @@ def main():
     databaseType = args.databaseType
 
     if not nonRoot:
-        values = ccqHubMethods.checkAdminRights()
+        values = credentials.checkAdminRights()
         if values['status'] != "success":
             print "You are not running with root permissions. It is advised that ccqHub be installed with root permissions in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub."
             sys.exit(0)
@@ -107,8 +104,7 @@ def main():
         print "Successfully installed ccqHub to the directory: " + str(prefix)
 
     #Create the Databases for ccqHub to use
-    dbInterface = sqlLite3Database()
-    tableNameResults = dbInterface.generateTableNames()
+    tableNameResults = ccqHubMethods.generateTableNames()
     if tableNameResults['status'] != "success":
         print tableNameResults['payload']
     else:
@@ -134,11 +130,11 @@ def main():
         ccqHubVars.initInstaller(prefix)
         ccqHubVars.ccqHubDBLock = threading.RLock()
 
-        lookupTableCreationResults = dbInterface.createTable(lookupTableName)
+        lookupTableCreationResults = ccqHubMethods.createTable(lookupTableName)
         if lookupTableCreationResults['status'] != "success":
             print lookupTableCreationResults['payload']
             sys.exit(0)
-        objectTableCreationResults = dbInterface.createTable(objectTableName)
+        objectTableCreationResults = ccqHubMethods.createTable(objectTableName)
         if objectTableCreationResults['status'] != "success":
             print objectTableCreationResults['payload']
             sys.exit(0)

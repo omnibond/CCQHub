@@ -39,5 +39,29 @@ def returnCompoundIndexDefinition():
         ]},
         {"Identity": [
             "name"
+        ]},
+        {"Target": [
+            "targetName",
+            "schedulerType",
+            "targetAddress",
+            "name"
+        ]},
+        {"Target": [
+            "targetAddress",
+            "targetName",
+            "schedulerType",
+            "name"
+        ]},
+        {"Target": [
+            "schedulerType",
+            "name"
+        ]},
+        {"Target": [
+            "targetAddress",
+            "schedulerType",
+            "name"
+        ]},
+        {"Target": [
+            "name"
         ]}
     ]

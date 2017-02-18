@@ -60,7 +60,7 @@ def init():
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
-                databaseType = "sqlite3"
+                databaseType = None
                 ccqHubPrefix = None
                 ccqHubDBLock = None
 
@@ -71,7 +71,13 @@ def init():
             ccqHubObjectDBName = None
             ccqHubPrefix = None
             ccqHubDBLock = None
-            databaseType = "sqlite3"
+            databaseType = None
+    else:
+        ccqHubLookupDBName = None
+        ccqHubObjectDBName = None
+        ccqHubPrefix = None
+        ccqHubDBLock = None
+        databaseType = None
 
 def initInstaller(prefix):
     global ccqHubConfigFileLocation
@@ -97,7 +103,7 @@ def initInstaller(prefix):
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
-                databaseType = "sqlite3"
+                databaseType = None
                 ccqHubPrefix = None
 
         except Exception as e:

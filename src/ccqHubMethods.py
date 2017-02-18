@@ -27,7 +27,8 @@ from random import randint
 import datetime
 from datetime import timedelta
 import ccqHubVars
-import permissions
+import policies
+import threading
 
 # sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 # from Slurm import SlurmScheduler
@@ -38,12 +39,62 @@ import permissions
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
 from sqlLite3Database import sqlLite3Database
 
-dbInterface = sqlLite3Database()
+ccqHubVars.init()
+if ccqHubVars.ccqHubDBLock is None:
+    ccqHubVars.ccqHubDBLock = threading.RLock()
+
+if ccqHubVars.databaseType is None or ccqHubVars.databaseType == "sqlite3":
+    dbInterface = sqlLite3Database()
+else:
+    print "Database type not supported at this time."
+    sys.exit(0)
 
 ccqHubKeyDir = "/.keys"
 ccqHubKeyFile = "/.keys/ccqHub.key"
 
 
+########################################################################################################################
+#                         Database Methods that call the chosen DB interface                                           #
+########################################################################################################################
+def queryObj(limit, key, action, returnType, filter=None):
+    kwargs = {'key': key, 'action': action, 'returnType': returnType, "limit": limit, 'filter': filter}
+    return dbInterface.queryObj(**kwargs)
+
+
+def handleObj(*args):
+    return dbInterface.handleObj(*args)
+
+
+def addObj(*args):
+    return dbInterface.addObj(*args)
+
+
+def deleteObj(*args):
+    return dbInterface.addObj(*args)
+
+
+def addIndexes(*args):
+    return dbInterface.addIndexes(*args)
+
+
+def deleteIndexes(*args):
+    return dbInterface.deleteIndexes(*args)
+
+
+def createTable(*args):
+    return dbInterface.createTable(*args)
+
+
+def tableConnect(*args):
+    return dbInterface.tableConnect(*args)
+
+
+def generateTableNames():
+    return dbInterface.generateTableNames()
+
+########################################################################################################################
+#                                      Methods that deal with job management                                           #
+########################################################################################################################
 def updateJobInDB(fieldsToAddToJob, jobId):
     #Update the job DB entry with the status of the job!
     done = False
@@ -576,36 +627,6 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
     else:
         return {"status": "partial-failure", "payload": "There was an error encountered trying to delete the job! The job you want to delete on is running on a Cluster that is not the one you are currently using!\n"}
 
-def getControlNodeForCCInstance():
-    clusterName = ""
-    controlNodeIp = ""
-    urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
-    instanceId = urlResponse.read()
-
-    items = dbInterface.queryObj(None, instanceId, "get", "dict")
-    if items['status'] == "success":
-        items = items['payload']
-    else:
-        return {"status": "error", "payload": "Error: QueryErrorException! Unable to get Item!"}
-
-    for item in items:
-        clusterName = item['clusterName']
-
-    items = dbInterface.queryObj(None, "RecType-ControlNode-clusterName-" + str(clusterName)+ "-", "query", "dict")
-    if items['status'] == "success":
-        items = items['payload']
-    else:
-        return {"status": "error", "payload": "Error: QueryErrorException! Unable to get Item!"}
-
-    for item in items:
-        controlNodeIp = item['publicIP']
-
-    if controlNodeIp != "":
-        return {"status": "success", "payload": controlNodeIp}
-
-    else:
-        return {"status": "error", "payload": "There was a problem getting the ControlNode IP address!"}
-
 def getSchedulerAndSchedTypeFromJob(jobId):
     results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
@@ -742,7 +763,7 @@ def saveAndGenNewUserKey(actions):
 
         obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "key": [str(key)]}}
 
-        validActions = permissions.getValidActionsAndRequiredAttributes()
+        validActions = policies.getValidActionsAndRequiredAttributes()
         for action in actions:
             if action in validActions:
                 for attribute in validActions[action]:
@@ -838,22 +859,3 @@ def decryptString(data):
             return {"status": "success", "payload": decData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
-
-def checkAdminRights():
-    import ctypes
-    import os
-
-    try:
-        # Check admin rights on Unix
-        isAdmin = os.getuid()
-        if isAdmin == 0:
-            return {"status": "success", "payload": True}
-        else:
-            return {"status": "failure", "payload": False}
-    except AttributeError:
-        # Check admin rights Windows
-        isAdmin = ctypes.windll.shell32.IsUserAnAdmin()
-        if isAdmin:
-            return {"status": "success", "payload": True}
-        else:
-            return {"status": "failure", "payload": False}

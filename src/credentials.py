@@ -17,27 +17,39 @@
 
 import os
 import sys
+import policies
+import ccqHubMethods
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
-from sqlLite3Database import sqlLite3Database
 
-dbInterface = sqlLite3Database()
+def checkAdminRights():
+    import ctypes
+    import os
 
-def getValidActionsAndRequiredAttributes():
-    # These identify the valid actions and what attributes the Identity is required to have in order to be granted permission to perform the action
-    actionsAndRequiredAttributes = {"ccqHubAdmin": {"ccqHubAdmin": "True"},
-                                    "proxyJob": {"proxyJob": "True"},
-                                    "submitJob": {"submitJob": "True"}
-                                   }
-    return actionsAndRequiredAttributes
+    try:
+        # Check admin rights on Unix
+        isAdmin = os.getuid()
+        if isAdmin == 0:
+            return {"status": "success", "payload": True}
+        else:
+            return {"status": "failure", "payload": False}
+    except AttributeError:
+        # Check admin rights Windows
+        isAdmin = ctypes.windll.shell32.IsUserAnAdmin()
+        if isAdmin:
+            return {"status": "success", "payload": True}
+        else:
+            return {"status": "failure", "payload": False}
+
+
+
 
 
 def evaluatePermssions(subject, actions):
     # Get the valid actions and requiredAttributes
-    actionsAndRequiredAttributes = getValidActionsAndRequiredAttributes()
+    actionsAndRequiredAttributes = policies.getValidActionsAndRequiredAttributes()
 
     typeOfSubject = subject['type']
-    response = dbInterface.queryObj(None, "RecType-Identity-" + str(typeOfSubject) + "-" + str(subject['subject']), "query", "json", "beginsWith")
+    response = ccqHubMethods.queryObj(None, "RecType-Identity-" + str(typeOfSubject) + "-" + str(subject['subject']) + "-name-", "query", "json", "beginsWith")
     if response['status'] == "success":
         results = response['payload']
         validated = False
