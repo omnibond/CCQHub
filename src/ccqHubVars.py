@@ -45,8 +45,8 @@ def init():
     parser = ConfigParser.ConfigParser()
 
     # Check to see if the user has defined their own config file in their home directory
-    if os.path.isfile(os.path.dirname(os.path.realpath(__file__)) + "/../ccqHub.conf"):
-        ccqHubConfigFileLocation = os.path.dirname(os.path.realpath(__file__)) + "/../ccqHub.conf"
+    if os.path.isfile(os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"):
+        ccqHubConfigFileLocation = os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"
         try:
             parser.read(ccqHubConfigFileLocation)
             try:
@@ -90,8 +90,8 @@ def initInstaller(prefix):
     parser = ConfigParser.ConfigParser()
 
     # Check to see if the user has defined their own config file in their home directory
-    if os.path.isfile(str(prefix) + "/ccqHub.conf"):
-        ccqHubConfigFileLocation = str(prefix) + "/ccqHub.conf"
+    if os.path.isfile(str(prefix) + "/etc/ccqHub.conf"):
+        ccqHubConfigFileLocation = str(prefix) + "/etc/ccqHub.conf"
         try:
             parser.read(ccqHubConfigFileLocation)
             try:

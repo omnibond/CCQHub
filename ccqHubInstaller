@@ -60,10 +60,10 @@ def main():
     # Check to see if the ccqHub directory exists or not, if it does not create it.
     if not os.path.isdir(str(prefix)):
         print "Prefix directory not found, attempting to create the directory " + str(prefix) + " now."
-        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src")
+        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var")
         if int(status) != 0:
             # Creation of the directory failed print the output and exit
-            print "There was an error trying to create the directory. The error message is: " + str(output)
+            print "There was an error trying to create the installation directories. The error message is: " + str(output)
             sys.exit(0)
         else:
             print "Successfully created the new ccqHub directory: " + str(prefix)
@@ -88,18 +88,23 @@ def main():
                 print "There was an error remove the old ccqHub directory. The error message is: " + str(output)
                 sys.exit(0)
             else:
-                status, output = commands.getstatusoutput("mkdir -p " + str(prefix))
+                status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var")
                 if int(status) != 0:
                     # Creation of the directory failed print the output and exit
                     print "There was an error trying to create the directory. The error message is: " + str(output)
                     sys.exit(0)
 
     # Install ccqHub to the specified directory:
-    status, output = commands.getstatusoutput("cp -R src/ " + str(prefix))
-    if int(status) != 0:
+    status, output = commands.getstatusoutput("cp -R src/ bin/ " + str(prefix))
+    secondStatus, secondOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
+    if int(status) != 0 or int(secondStatus) != 0:
         # Installation of ccqHub failed print the error and exit
-        print "The ccqHub installation failed. The error message is: " + str(output)
-        sys.exit(0)
+        if int(status) != 0:
+            print "The ccqHub installation failed. The error message is: " + str(output)
+            sys.exit(0)
+        elif int(secondStatus) != 0:
+            print "The ccqHub installation failed. The error message is: " + str(output)
+            sys.exit(0)
     else:
         print "Successfully installed ccqHub to the directory: " + str(prefix)
 
@@ -111,7 +116,7 @@ def main():
         lookupTableName = tableNameResults['payload']['lookupTableName']
         objectTableName = tableNameResults['payload']['objectTableName']
 
-        conigFile = open(str(prefix) + "/ccqHub.conf", "w")
+        conigFile = open(str(prefix) + "/etc/ccqHub.conf", "w")
         parser = ConfigParser.ConfigParser()
 
         # Generate new ccqHub config file that will contain the names of the database tables and other useful information

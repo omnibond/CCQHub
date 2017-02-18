@@ -91,9 +91,19 @@ class sqlLite3Database(Database):
                                 # hash_key (string), meta_var (json object), job_script_text (string), sharingObj
                                 item = {}
                                 for itemData in dbObject:
-                                    # Add each item in the meta_var_object to the return object to make it compatible with current ccq structure
-                                    for key, value in json.loads(itemData['meta_var']).items():
-                                        item[key] = value
+                                    for thing in itemData:
+                                        if thing == "meta_var":
+                                            # Add each item in the meta_var_object to the return object to make it compatible with current ccq structure
+                                            for key, value in json.loads(itemData['meta_var']).items():
+                                                item[key] = value
+                                        elif thing == "sharingObj":
+                                            for key, value in json.loads(itemData['sharingObj']).items():
+                                                item[key] = value
+                                        elif thing == "hash_key":
+                                            item['name'] = itemData[thing]
+                                        else:
+                                            item[thing] = itemData[thing]
+
                                 returnArr.append(item)
                             except Exception as e:
                                 print "Encountered an exception: " + str(traceback.format_exc(e))
@@ -337,7 +347,7 @@ class sqlLite3Database(Database):
 
     def createTable(self, tableName):
         try:
-            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db")
+            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
             c = conn.cursor()
             if "lookup" in str(tableName).lower():
                 c.execute("CREATE TABLE ccqHubLookup (hash_key, range_key, objectID)")
@@ -353,7 +363,7 @@ class sqlLite3Database(Database):
 
     def tableConnect(self, tableName):
         try:
-            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db")
+            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
             return {"status": "success", "payload": conn}
         except Exception as e:
             print "There was a problem trying to connect to the local sqlite3 database: " + str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db"
