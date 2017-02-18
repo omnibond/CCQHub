@@ -32,14 +32,14 @@ def main():
     import ccqHubMethods
     import ccqHubVars
 
-    defaultPrefix = "/etc/ccqHub"
+    defaultPrefix = "/opt/ccqHub"
 
     dbInterface = sqlLite3Database()
 
     parser = argparse.ArgumentParser(description="Installation utility for ccqHub. This utility will install ccqHub to the desired location, create the database backend, and generate the encryption key used by ccqHub.")
     parser.add_argument('-V', '--version', action='version', version='ccqHubInstaller (version 0.1)')
     parser.add_argument('-nr', '--nr', action='store_true', help="Specifies that ccqHub should be installed with non-root privileges. This is not recommended for data security and privacy reasons.")
-    parser.add_argument('-p', "--prefix", help="The location that you would like ccqHub to installed to, if running in non-root mode this argument is required. If running in root mode this argument is optional with the default install going to /etc/ccqHub", default=None)
+    parser.add_argument('-p', "--prefix", help="The location that you would like ccqHub to installed to, if running in non-root mode this argument is required. If running in root mode this argument is optional with the default install going to /opt/ccqHub", default=None)
     parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3")
 
     args = parser.parse_args()
@@ -91,14 +91,14 @@ def main():
                 print "There was an error remove the old ccqHub directory. The error message is: " + str(output)
                 sys.exit(0)
             else:
-                status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src")
+                status, output = commands.getstatusoutput("mkdir -p " + str(prefix))
                 if int(status) != 0:
                     # Creation of the directory failed print the output and exit
                     print "There was an error trying to create the directory. The error message is: " + str(output)
                     sys.exit(0)
 
     # Install ccqHub to the specified directory:
-    status, output = commands.getstatusoutput("cp -R src/ " + str(prefix) + "/src")
+    status, output = commands.getstatusoutput("cp -R src/ " + str(prefix))
     if int(status) != 0:
         # Installation of ccqHub failed print the error and exit
         print "The ccqHub installation failed. The error message is: " + str(output)
@@ -107,6 +107,7 @@ def main():
         print "Successfully installed ccqHub to the directory: " + str(prefix)
 
     #Create the Databases for ccqHub to use
+    dbInterface = sqlLite3Database()
     tableNameResults = dbInterface.generateTableNames()
     if tableNameResults['status'] != "success":
         print tableNameResults['payload']
@@ -155,9 +156,18 @@ def main():
             print values['payload']
         else:
             # Need to generate an API key that must be used in order to perform ccqHub management functions
-            values = ccqHubMethods.saveAndGenUserAppKey()
+            permissions = ["root"]
+            values = ccqHubMethods.saveAndGenUserAppKey(permissions)
             if values['status'] != "success":
                 print "Error in saveAndGenUserAppKey"
                 print values['payload']
+            else:
+                # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
+                generatedKey = values['payload']
+                rootKeyFile = open(str(os.getcwd()) + "/ccqHubKey.key", "w")
+                rootKeyFile.write(str(generatedKey))
+                rootKeyFile.close()
+                os.system("chmod 400 " + str(os.getcwd()) + "/ccqHubKey.key")
 
 main()
+

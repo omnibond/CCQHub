@@ -86,7 +86,7 @@ class sqlLite3Database(Database):
                         nextCursor = tableConn.cursor()
                         for objectId in data:
                             try:
-                                nextCursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", objectId)
+                                nextCursor.execute("SELECT * FROM ccqHubLookup WHERE hash_key=?", objectId)
                                 dbObject = nextCursor.fetchall()
                                 # hash_key (string), meta_var (json object), job_script_text (string), sharingObj
                                 item = {}
@@ -131,7 +131,8 @@ class sqlLite3Database(Database):
 
     def handleObj(self, action, obj):
         baseObj = obj
-
+        #print action
+        #print type(obj)
         #Get a connection to both tables to be passed into the other functions
         lookupTableConnInfo = self.tableConnect(ccqHubVars.ccqHubLookupDBName)
         objectTableConnInfo = self.tableConnect(ccqHubVars.ccqHubObjectDBName)
@@ -237,6 +238,8 @@ class sqlLite3Database(Database):
         try:
             cursor = objectTableConnection.cursor()
             data = (str(hash_key), json.dumps(meta_var), str(jobScriptText), json.dumps(sharingObject))
+            #print data
+            #print "DATA"
             cursor.execute("INSERT INTO ccqHubObject VALUES (?, ?, ?, ?)", data)
             objectTableConnection.commit()
             return {"status": "success", "payload": "Successfully added  the object"}
@@ -265,6 +268,7 @@ class sqlLite3Database(Database):
             name = obj['name']
         except KeyError as e:
             name = obj['hash_key']
+            obj['name'] = name
 
         indexValues = compoundIndexDefinition.returnCompoundIndexDefinition()
 

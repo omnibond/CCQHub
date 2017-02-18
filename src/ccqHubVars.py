@@ -45,8 +45,8 @@ def init():
     parser = ConfigParser.ConfigParser()
 
     # Check to see if the user has defined their own config file in their home directory
-    if os.path.isfile("../ccqHub.conf"):
-        ccqHubConfigFileLocation = "../ccqHub.conf"
+    if os.path.isfile(os.path.dirname(os.path.realpath(__file__)) + "/../ccqHub.conf"):
+        ccqHubConfigFileLocation = os.path.dirname(os.path.realpath(__file__)) + "/../ccqHub.conf"
         try:
             parser.read(ccqHubConfigFileLocation)
             try:
@@ -54,12 +54,15 @@ def init():
                 ccqHubLookupDBName = parser.get("Database", "lookupTableName")
                 ccqHubObjectDBName = parser.get("Database", "objectTableName")
                 ccqHubPrefix = parser.get("General", "ccqHubPrefix")
+                ccqHubDBLock = None
             except Exception as e:
+                print "ERROR" + str(e)
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
                 databaseType = "sqlite3"
                 ccqHubPrefix = None
+                ccqHubDBLock = None
 
         except Exception as e:
             print traceback.format_exc(e)
@@ -67,6 +70,8 @@ def init():
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
             ccqHubPrefix = None
+            ccqHubDBLock = None
+            databaseType = "sqlite3"
 
 def initInstaller(prefix):
     global ccqHubConfigFileLocation
