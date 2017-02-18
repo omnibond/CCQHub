@@ -149,25 +149,19 @@ def main():
         print "Error in generateEncryptionKey"
         print values['payload']
     else:
-        # Need to write out initial object to the DB that will store the API keys for ccqHub
-        values = ccqHubMethods.writeAPIKeyObj()
+        # Need to generate an API key that must be used in order to perform ccqHub management functions
+        permissions = ["ccqHubAdmin"]
+        values = ccqHubMethods.saveAndGenNewUserKey(permissions)
         if values['status'] != "success":
-            print "Error in writeAPIKeyObj"
+            print "Error in saveAndGenUserKey"
             print values['payload']
         else:
-            # Need to generate an API key that must be used in order to perform ccqHub management functions
-            permissions = ["root"]
-            values = ccqHubMethods.saveAndGenUserAppKey(permissions)
-            if values['status'] != "success":
-                print "Error in saveAndGenUserAppKey"
-                print values['payload']
-            else:
-                # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
-                generatedKey = values['payload']
-                rootKeyFile = open(str(os.getcwd()) + "/ccqHubKey.key", "w")
-                rootKeyFile.write(str(generatedKey))
-                rootKeyFile.close()
-                os.system("chmod 400 " + str(os.getcwd()) + "/ccqHubKey.key")
+            # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
+            generatedKey = values['payload']
+            rootKeyFile = open(str(os.getcwd()) + "/ccqHubKey.key", "w")
+            rootKeyFile.write(str(generatedKey))
+            rootKeyFile.close()
+            os.system("chmod 400 " + str(os.getcwd()) + "/ccqHubKey.key")
 
 main()
 

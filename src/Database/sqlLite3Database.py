@@ -86,7 +86,7 @@ class sqlLite3Database(Database):
                         nextCursor = tableConn.cursor()
                         for objectId in data:
                             try:
-                                nextCursor.execute("SELECT * FROM ccqHubLookup WHERE hash_key=?", objectId)
+                                nextCursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", objectId)
                                 dbObject = nextCursor.fetchall()
                                 # hash_key (string), meta_var (json object), job_script_text (string), sharingObj
                                 item = {}
@@ -280,16 +280,31 @@ class sqlLite3Database(Database):
             try:
                 # Check to see if the index definition that we are on is for our RecType or not. If not just pass
                 tempIndex[RecType]
+                holderAttr = None
                 try:
                     # Create the index from the definition found in compoundIndexDefinition
                     index = "RecType" + "-" + RecType + "-"
                     for y in range(len(tempIndex[RecType])):
                         attr = tempIndex[RecType][y]
-                        if y < len(tempIndex[RecType]) - 1:
-                            index += attr + "-" + str(obj[attr]) + "-"
+
+                        objType = type(obj[attr])
+                        if "list" in str(objType) or "dict" in str(objType):
+                            holderAttr = attr
+                            if y < len(tempIndex[RecType]) - 1:
+                                index += attr + "-holder-"
+                            else:
+                                index += attr + "-holder"
                         else:
-                            index += attr + "-" + str(obj[attr])
-                        # Add the new index to be saved to the list of indexes to write to the DB
+                            if y < len(tempIndex[RecType]) - 1:
+                                index += attr + "-" + str(obj[attr]) + "-"
+                            else:
+                                index += attr + "-" + str(obj[attr])
+
+                    if "holder" in index and holderAttr is not None:
+                        for z in range(len(obj[holderAttr])):
+                            temp = index.replace("holder", obj[holderAttr][z])
+                            dataToInsert.append(('N/A', str(temp), str(name)))
+                    else:
                         dataToInsert.append(('N/A', str(index), str(name)))
                 except Exception as e:
                     print traceback.format_exc(e)

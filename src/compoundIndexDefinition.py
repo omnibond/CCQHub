@@ -29,7 +29,15 @@ def returnCompoundIndexDefinition():
             "userName",
             "name"
         ]},
-        {"APIKeys": [
+        {"Identity": [
+            "userName",
+            "name"
+        ]},
+        {"Identity": [
+            "key",
+            "name"
+        ]},
+        {"Identity": [
             "name"
         ]}
     ]

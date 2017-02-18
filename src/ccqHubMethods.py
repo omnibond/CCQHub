@@ -27,6 +27,7 @@ from random import randint
 import datetime
 from datetime import timedelta
 import ccqHubVars
+import permissions
 
 # sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 # from Slurm import SlurmScheduler
@@ -728,72 +729,35 @@ def encodeString(k, field):
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
 
-
-def writeAPIKeyObj():
-    try:
-        placeHolder = encryptString(json.dumps("{\"keys\": {}}"))
-        obj = {'action': "create", 'obj': {"RecType": "APIKeys", "name": "APIKeys"}}
-
-        # Put values in the object to be saved to Database
-        obj['obj']['string'] = placeHolder['payload']
-        res = dbInterface.handleObj(**obj)
-
-        if res['status'] == "success":
-            return {"status": "success", "payload": "Successfully saved the APIKeys object"}
-        else:
-            return {"status": "error", "payload": res['payload']}
-    except Exception as ex:
-        return {"status": "error", "payload": {"error": "There was an error writing out the API Key Object to the Database", "traceback": traceback.format_exc(ex)}}
-
-def saveAndGenUserAppKey(permissions):
+def saveAndGenNewUserKey(actions):
     import hashlib
     import binascii
     import uuid
     try:
         dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
-        response = dbInterface.queryObj(None, "APIKeys", "get", "json")
-        if response['status'] == "success":
-            results = response['payload']
-            for tempItem in results:
-                #print "TempItem is: " + str(tempItem)
-                apiKeysAndPerms = decryptString(tempItem['string'])
-                apiKeysAndPerms = json.loads(apiKeysAndPerms['payload'])
-                apiKeysAndPerms = json.loads(apiKeysAndPerms)
-                apiKeys = apiKeysAndPerms['keys']
+        #Add the newly generated key and the key's permissions to the key object
+        #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
+        identityUuid = str(uuid.uuid4())
+        key = binascii.hexlify(dk)
 
-                #Add the newly generated key and the key's permissions to the key object
-                #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
-                apiKeyUuid = str(uuid.uuid4())
-                apiKeys[binascii.hexlify(dk)] = apiKeyUuid
-                #keyPerms[str(binascii.hexlify(dk))] = str(uuid)
+        obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "key": [str(key)]}}
 
-                apiKeysAndPerms['keys'] = apiKeys
+        validActions = permissions.getValidActionsAndRequiredAttributes()
+        for action in actions:
+            if action in validActions:
+                for attribute in validActions[action]:
+                    obj['obj'][attribute] = validActions[action][attribute]
+            else:
+                return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to generate new user key."}
 
-                #Now we have to encrypt the new object and save it back to the DB
-                temp = json.dumps(apiKeysAndPerms)
-                #tempObj = {"string": str(temp)}
-                placeHolder = encryptString(temp)
-                #print placeHolder
-                tempItem['string'] = placeHolder['payload']
-
-                obj = {}
-                obj['action'] = "modify"
-                obj['obj'] = tempItem
-                res = dbInterface.handleObj(**obj)
-                if res['status'] != "success":
-                    return {"status": "error", "payload": res['payload']}
-
-                # Save out the key to the DB, it has it's own object for storing key permissions and other information
-                obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(apiKeyUuid), "ruleInputs": permissions, "proxyJob": "False"}}
-                # Put values in the object to be saved to Database
-                res = dbInterface.handleObj(**obj)
-                if res['status'] != "success":
-                    return {"status": "error", "payload": res['payload']}
+        # Save out the key to the DB, it has it's own object for storing key permissions and other information
+        res = dbInterface.handleObj(**obj)
+        if res['status'] != "success":
+            return {"status": "error", "payload": res['payload']}
         else:
-            return {"status": "error", "payload": response['payload']}
-        return {"status": "success", "message": "Successfully generated and saved APIKey for ccqHub root access.", "payload": binascii.hexlify(dk)}
+            return {"status": "success", "message": "Successfully generated and saved key for ccqHub root access.", "payload": binascii.hexlify(dk)}
     except Exception as e:
-        return {"status": "error", "payload": {"error": "There was a problem generating the APIKey for ccqHub root access.", "traceback": traceback.format_exc(e)}}
+        return {"status": "error", "payload": {"error": "There was a problem generating the key for ccqHub root access.", "traceback": traceback.format_exc(e)}}
 
 def encryptString(data):
     # Perform the actual encryption of the data utilizing the key that is provided
@@ -893,23 +857,3 @@ def checkAdminRights():
             return {"status": "success", "payload": True}
         else:
             return {"status": "failure", "payload": False}
-
-def checkKey(key, permissions):
-    response = dbInterface.queryObj(None, "APIKeys", "get", "json")
-    if response['status'] == "success":
-        results = response['payload']
-        for tempItem in results:
-            #print "TempItem is: " + str(tempItem)
-            apiKeysAndPerms = decryptString(tempItem['string'])
-            apiKeysAndPerms = json.loads(apiKeysAndPerms['payload'])
-            apiKeys = apiKeysAndPerms['keys']
-
-            if key in apiKeys:
-                # Need to evaluate permissions
-
-                response = dbInterface.queryObj(None, str(apiKeys[key]), "get", "json")
-                if response['status'] == "success":
-                    results = response['payload']
-                    for tempItem in results:
-                        grantedPermissions = tempItem['permissions']
-                        for permissions in
