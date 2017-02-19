@@ -63,5 +63,9 @@ def returnCompoundIndexDefinition():
         ]},
         {"Target": [
             "name"
-        ]}
+        ]},
+        {"Target": [
+            "targetName",
+            "name"
+        ]},
     ]

@@ -24,7 +24,7 @@ import ccqHubMethods
 import credentials
 
 
-def formatOutput(listOfTargets):
+def formatOutput(listOfTargets, targetAddressInput):
     headerText = "Name               Address                     Type        Protocol    Auth\n"
     headerText += "------------------------------------------------------------------------------\n"
     returnString = ""
@@ -62,7 +62,13 @@ def formatOutput(listOfTargets):
                 # Make the job name 12 chars long and then add the padding to it
                 targetProtocol = targetProtocol + (" " * (11 - len(targetProtocol))) + (" " * 1)
 
-            targetList.append(str(targetName) + str(address) + str(targetType) + str(targetProtocol) + str(targetAuth) + "\n")
+            if targetAddressInput is None:
+                if (str(targetName) + str(address) + str(targetType) + str(targetProtocol) + str(targetAuth) + "\n") not in targetList:
+                    targetList.append(str(targetName) + str(address) + str(targetType) + str(targetProtocol) + str(targetAuth) + "\n")
+            else:
+                if str(targetAddressInput) in str(address):
+                    if (str(targetName) + str(address) + str(targetType) + str(targetProtocol) + str(targetAuth) + "\n") not in targetList:
+                        targetList.append(str(targetName) + str(address) + str(targetType) + str(targetProtocol) + str(targetAuth) + "\n")
 
     if len(targetList) > 0:
         for thing in targetList:
@@ -102,9 +108,13 @@ def main():
             queryString = "RecType-Target-"
             if schedType is None:
                 if targetName is not None:
-                    queryString += "targetName-" + str(targetName) + "-"
+                    queryString = "RecType-Target-targetName-" + str(targetName) + "-name-"
                 if targetAddress is not None:
-                     queryString += "targetAddress-" + str(targetAddress) + "-targetName-"
+                    queryString = "RecType-Target-targetAddress-" + str(targetAddress) + "-"
+                    if targetName is not None:
+                        queryString += "targetName-" + str(targetName) + "-schedulerType-"
+                    else:
+                        queryString += "schedulerType-"
             else:
                 if targetName is not None:
                     queryString += "targetName-" + str(targetName) + "-schedulerType-" + str(schedType) + "-"
@@ -124,7 +134,7 @@ def main():
             response = ccqHubMethods.queryObj(None, queryString, "query", "json", "beginsWith")
             if response['status'] == "success":
                 results = response['payload']
-                print formatOutput(results)
+                print formatOutput(results, targetAddress)
 
 
     except Exception as e:
