@@ -17,8 +17,8 @@
 
 def getValidActionsAndRequiredAttributes():
     # These identify the valid actions and what attributes the Identity is required to have in order to be granted permission to perform the action
-    actionsAndRequiredAttributes = {"ccqHubAdmin": {"ccqHubAdmin": "True"},
-                                    "proxyJob": {"proxyJob": "True"},
-                                    "submitJob": {"submitJob": "True"}
+    actionsAndRequiredAttributes = {"ccqHubAdmin": {"groups": [], "attributes": {"ccqHubAdmin": "True"}},
+                                    "proxyJob": {"groups": [], "attributes": {"proxyJob": "True"}},
+                                    "submitJob": {"groups": [], "attributes": {"submitJob": "True"}}
                                    }
     return actionsAndRequiredAttributes

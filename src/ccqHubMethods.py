@@ -50,7 +50,8 @@ else:
     sys.exit(0)
 
 ccqHubKeyDir = "/.keys"
-ccqHubKeyFile = "/.keys/ccqHub.key"
+ccqHubKeyFile = str(ccqHubKeyDir) + "/ccqHubEnc.key"
+ccqHubAdminKeyFile = str(ccqHubKeyDir) + "/ccqHubAdmin.key"
 
 
 ########################################################################################################################
@@ -829,6 +830,8 @@ def generateEncryptionKey():
         except Exception as e:
             return {"status": "error", "payload": {"error": "There was an issue writing out the keyfile.", "traceback": str(traceback.format_exc(e))}}
         return {"status": "success", "payload": key}
+    except ImportError as ie:
+        return {"status": "error", "payload": {"error": "ccqHub requires the pip package cryptography to be installed in order to function properly. Please install the cryptography pip package and try installing ccqHub again.", "traceback": str(traceback.format_exc(ie))}}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem generating the encryption key for ccqHub.", "traceback": str(traceback.format_exc(e))}}
 

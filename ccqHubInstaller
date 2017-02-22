@@ -100,7 +100,6 @@ def main():
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
     status, output = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
     secondStatus, secondOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
-    print str(prefix) + "/bin/*"
     if int(status) != 0 or int(secondStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
@@ -175,22 +174,22 @@ def main():
     print "Generating an encryption key for the ccqHub installation."
     values = ccqHubMethods.generateEncryptionKey()
     if values['status'] != "success":
-        print "Error in generateEncryptionKey"
-        print values['payload']
+        print values['payload']['error']
+        print values['payload']['traceback']
     else:
         # Need to generate an API key that must be used in order to perform ccqHub management functions
         permissions = ["ccqHubAdmin"]
         values = ccqHubMethods.saveAndGenNewUserKey(permissions)
         if values['status'] != "success":
-            print "Error in saveAndGenUserKey"
-            print values['payload']
+            print values['payload']['error']
+            print values['payload']['traceback']
         else:
             # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
             generatedKey = values['payload']
-            rootKeyFile = open(str(os.getcwd()) + "/ccqHubKey.key", "w")
+            rootKeyFile = open(str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile), "w")
             rootKeyFile.write(str(generatedKey))
             rootKeyFile.close()
-            os.system("chmod 400 " + str(os.getcwd()) + "/ccqHubKey.key")
+            os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile))
 
 main()
 
