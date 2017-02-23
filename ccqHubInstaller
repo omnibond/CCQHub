@@ -98,15 +98,19 @@ def main():
 
     # Install ccqHub to the specified directory:
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
-    status, output = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
-    secondStatus, secondOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
-    if int(status) != 0 or int(secondStatus) != 0:
+    secondStatus, secondOutput = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
+    thirdStatus, thirdOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
+    print str(prefix) + "/bin/*"
+    if int(status) != 0 or int(secondStatus) != 0 or int(thirdStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
             print "The ccqHub installation failed. The error message is: " + str(output)
             sys.exit(0)
         elif int(secondStatus) != 0:
-            print "The ccqHub installation failed. The error message is: " + str(output)
+            print "The ccqHub installation failed. The error message is: " + str(secondOutput)
+            sys.exit(0)
+        elif int(thirdStatus) != 0:
+            print "The ccqHub installation failed. The error message is: " + str(thirdOutput)
             sys.exit(0)
     else:
         print "Successfully installed ccqHub to the directory: " + str(prefix)
@@ -127,10 +131,14 @@ def main():
         elif sys.platform == "darwin":
             if not nonRoot:
                 status, output = commands.getstatusoutput("echo " + str(prefix) + "/bin >> /etc/paths")
-                status, output = commands.getstatusoutput("export PATH=$PATH:" + str(prefix) + "/bin")
-                if int(status) != 0:
-                    print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output)
-                    sys.exit(0)
+                secondStatus, secondOutput = commands.getstatusoutput("export PATH=$PATH:" + str(prefix) + "/bin")
+                if int(status) != 0 or int(secondStatus) != 0:
+                    if int(status) != 0:
+                        print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output)
+                        sys.exit(0)
+                    elif int(secondStatus) != 0:
+                        print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(secondOutput)
+                        sys.exit(0)
         elif sys.platform == "win32":
             #TODO figure out how to add to the PATH variable on Windows or make this work on Windows
             print "Adding to the PATH on Windows is not yet supported."
@@ -186,9 +194,9 @@ def main():
         else:
             # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
             generatedKey = values['payload']
-            rootKeyFile = open(str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile), "w")
-            rootKeyFile.write(str(generatedKey))
-            rootKeyFile.close()
+            adminKeyFile = open(str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile), "w")
+            adminKeyFile.write(str(generatedKey))
+            adminKeyFile.close()
             os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile))
 
 main()
