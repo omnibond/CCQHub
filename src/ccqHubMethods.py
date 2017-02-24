@@ -53,6 +53,8 @@ ccqHubKeyDir = "/.keys"
 ccqHubKeyFile = str(ccqHubKeyDir) + "/ccqHubEnc.key"
 ccqHubAdminKeyFile = str(ccqHubKeyDir) + "/ccqHubAdmin.key"
 
+encryptAlgNum = "a"
+
 
 ########################################################################################################################
 #                         Database Methods that call the chosen DB interface                                           #
@@ -751,33 +753,97 @@ def encodeString(k, field):
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
 
-def saveAndGenNewUserKey(actions):
+########################################################################################################################
+#                                     Methods that deal with encryption and app Keys                                   #
+########################################################################################################################
+def saveAndGenNewUserKey(userName, keyId, actions):
     import hashlib
     import binascii
     import uuid
     try:
+        # Generate the new keyUuid
+        validKey = False
+        attempts = 0
+        keyUuid = ""
+        while not validKey:
+            keyUuid = str(uuid.uuid4().get_hex()[0:6])
+            #Check and see if the generated keyUuid is already taken or not
+            res = queryObj(None, "RecType-Identity-keyId-" + str(keyUuid) + "-name-", "query", "json", "beginsWith")
+            if res['status'] == "success":
+                keyList = res['payload']
+                if len(keyList) == 0:
+                    validKey = True
+                else:
+                    attempts += 1
+            else:
+                attempts += 1
+            if attempts >= 5:
+                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": None}
+
         dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
         #Add the newly generated key and the key's permissions to the key object
         #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
         identityUuid = str(uuid.uuid4())
         key = binascii.hexlify(dk)
 
-        obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "key": [str(key)]}}
+        fullKey = str(keyUuid) + ":" + str(encryptAlgNum) + ":" + str(key)
 
-        validActions = policies.getValidActionsAndRequiredAttributes()
-        for action in actions:
-            if action in validActions:
-                for attribute in validActions[action]:
-                    obj['obj'][attribute] = validActions[action][attribute]
+        if keyId is not None or userName is not None:
+            # The user wants to add this key to the same object as the user or key name passed, we need to modify the object
+            # The user cannot add any new actions to this Identity just a new key that has the same permissions
+            queryString = ""
+            if keyId is not None:
+                queryString = "keyId-" + str(keyId)
+            elif userName is not None:
+                queryString = "userName-" + str(userName)
+            obj = {}
+            res = queryObj(None, "RecType-Identity-" + str(queryString) + "-name-", "query", "json", "beginsWith")
+            if res['status'] == "success":
+                objectList = res['payload']
+                for object in objectList:
+                    if userName is not None:
+                        userNames = json.loads(object['userName'])
+                        userNames.append(str(userName))
+                        object['userName'] = json.dumps(userNames)
+                    elif keyId is not None:
+                        decryptedKeyList = decryptString(object['keyInfo'])
+                        if decryptedKeyList['status'] != "success":
+                            return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": decryptedKeyList['payload']}
+                        else:
+                            keyList = json.loads(decryptedKeyList['payload'])
+                            keyList.append(fullKey)
+
+                            keyIdList = json.loads(object['keyId'])
+                            keyIdList.append(keyUuid)
+                            object['keyId'] = keyIdList
+
+                            encryptedKeyObj = encryptString(json.dumps(keyList))
+                            if encryptedKeyObj['status'] != "success":
+                                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": encryptedKeyObj['payload']}
+                            else:
+                                object['keyInfo'] = encryptedKeyObj['payload']
+
+                    obj = {'action': "modify", 'obj': object}
+        else:
+            encryptedKeyObj = encryptString(json.dumps([str(fullKey)]))
+            if encryptedKeyObj['status'] != "success":
+                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": encryptedKeyObj['payload']}
             else:
-                return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to generate new user key."}
+                obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "keyInfo": encryptedKeyObj['payload'], "keyId": [str(keyUuid)]}}
+                validActions = policies.getValidActionsAndRequiredAttributes()
+                for action in actions:
+                    if action in validActions:
+                        for attribute in validActions[action]:
+                            obj['obj'][attribute] = validActions[action][attribute]
+                    else:
+                        return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to generate new user key."}
 
         # Save out the key to the DB, it has it's own object for storing key permissions and other information
         res = dbInterface.handleObj(**obj)
         if res['status'] != "success":
             return {"status": "error", "payload": res['payload']}
         else:
-            return {"status": "success", "message": "Successfully generated and saved key for ccqHub root access.", "payload": binascii.hexlify(dk)}
+            return {"status": "success", "message": "Successfully generated and saved key for ccqHub root access.", "payload": fullKey}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem generating the key for ccqHub root access.", "traceback": traceback.format_exc(e)}}
 
@@ -862,3 +928,44 @@ def decryptString(data):
             return {"status": "success", "payload": decData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
+
+def validateAppKey(ccAccessKey):
+    response = queryObj(None, "RecType-Identity-keyId-" + str(ccAccessKey.split(":")[0]) + "-name-", "query", "json", "beginsWith")
+    if response['status'] == "success":
+        results = response['payload']
+        for tempItem in results:
+            try:
+                # Need to load the list of keys from the user and decrypt the object
+                results = decryptString(tempItem['keyInfo'])
+                if results['status'] != "success":
+                    return {"status": "error", "message": results['message']}
+                else:
+                    decryptedKeys = results['payload']
+            except Exception as e:
+                decryptedKeys = []
+
+            if len(decryptedKeys) != 0:
+                listOfUserKeys = json.loads(decryptedKeys)
+            else:
+                listOfUserKeys = []
+
+            if str(ccAccessKey) in listOfUserKeys:
+                #certDecodedPass = decryptString(tempItem['password'])
+                #if certDecodedPass['status'] != "success":
+                #    return {"status": "error", "payload": "App Key not valid."}
+                #else:
+                #    certDecodedPass = certDecodedPass['payload']
+                #    certDecodedUser = tempItem['userName']
+                certDecodedPass = "something"
+                certDecodedUser = "else"
+                return {"status": "success", "payload": "Successfully validated the key."}
+            else:
+                #The AccessKey provided is not valid return error
+                return {"status": "error", "payload": "App Key not valid."}
+
+        #If the APIKey object isn't found in the DB return not valid
+        return {"status": "error", "payload": "App Key not valid."}
+
+    else:
+        #If the APIKey object isn't found in the DB return not valid
+        return {"status": "error", "payload": "App Key not valid."}

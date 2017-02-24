@@ -71,7 +71,6 @@ def evaluatePermssions(subject, actions):
     tempObtainedObject = {}
     if response['status'] == "success":
         results = response['payload']
-        validated = False
         for identity in results:
             # We have the identity object
             for action in actions:

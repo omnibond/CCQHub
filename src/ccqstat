@@ -99,13 +99,13 @@ def ccqstat():
         sys.exit(0)
 
     #Check to see if the user has an API key, if so open the file and read in the key.
-    appKey = ""
+    ccAccessKey = ""
     try:
-        appKeyFile = open(str(appKeyLocation), "r")
-        for line in appKeyFile:
-            appKey += line
-    except KeyError:
-       appKey = None
+        ccAccessKey = open(str(appKeyLocation), "r")
+        for line in ccAccessKey:
+            ccAccessKey += line
+    except Exception as e:
+       ccAccessKey = None
 
     valKey = "unpw"
     userName = ""
@@ -132,7 +132,7 @@ def ccqstat():
 
     if not validUser:
         while attempts < 5 and not validUser:
-            if not isCert and appKey is None:
+            if not isCert and ccAccessKey is None:
                 userName = raw_input("Please enter your username: \n")
                 password = getpass.getpass("Please enter your password: \n")
                 encodedPassword = encodeString("ccqpwdfrval", str(password))
@@ -140,7 +140,7 @@ def ccqstat():
                 valKey = "unpw"
 
             url = "https://" + str(submitHost) + "/srv/ccqstat"
-            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(appKey)}
+            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)
@@ -149,12 +149,15 @@ def ccqstat():
                 #print res
                 res = json.loads(res)
                 if res['status'] == "failure":
-                    if not isCert:
+                    if not isCert and ccAccessKey is None:
                         print str(res['payload']['message']) + "\n\n"
                         attempts += 1
+                    elif ccAccessKey is not None:
+                        print "The key is not valid, please check your key and try again."
+                        sys.exit(0)
                     else:
                         isCert = False
-                        appKey = None
+                        ccAccessKey = None
                 elif res['status'] == "error":
                     #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
                     print res['payload']['message'] + "\n\n"

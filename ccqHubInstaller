@@ -187,7 +187,7 @@ def main():
     else:
         # Need to generate an API key that must be used in order to perform ccqHub management functions
         permissions = ["ccqHubAdmin"]
-        values = ccqHubMethods.saveAndGenNewUserKey(permissions)
+        values = ccqHubMethods.saveAndGenNewUserKey(None, None, permissions)
         if values['status'] != "success":
             print values['payload']['error']
             print values['payload']['traceback']
@@ -198,6 +198,11 @@ def main():
             adminKeyFile.write(str(generatedKey))
             adminKeyFile.close()
             os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile))
+
+        #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
+        #TODO make this auto-start and make it a little more intelligent
+        from subprocess import Popen
+        Popen(['/usr/bin/python', str(prefix) + "/src/ccqHubWebServer.py"])
 
 main()
 

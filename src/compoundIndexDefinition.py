@@ -34,7 +34,7 @@ def returnCompoundIndexDefinition():
             "name"
         ]},
         {"Identity": [
-            "key",
+            "keyId",
             "name"
         ]},
         {"Identity": [
