@@ -52,8 +52,16 @@ else:
 ccqHubKeyDir = "/.keys"
 ccqHubKeyFile = str(ccqHubKeyDir) + "/ccqHubEnc.key"
 ccqHubAdminKeyFile = str(ccqHubKeyDir) + "/ccqHubAdmin.key"
+ccqHubAdminJobSubmitKeyFile = str(ccqHubKeyDir) + "/ccqHubJobSubmit.key"
 
 encryptAlgNum = "a"
+
+# List of supported scheduler types. This is required in order to create a default target for each scheduler type.
+ccqHubSupportedSchedulerTypes = ["torque", "slurm", "ccq"]
+
+ccqHubSupportedProtocolTypes = ["http"]#,"local", "ssh"]
+
+ccqHubSupportedAuthenticationTypes = ["appkey"]#, "ssh", "username"]
 
 
 ########################################################################################################################
@@ -394,7 +402,6 @@ def getSchedulerIPInformation(schedName, schedType):
 # This method will only be called when we are submitting locally and therefore shouldn't need to do any of the cert auth
 # stuff because it will be being called locally only.
 def readyJobForScheduler(obj):
-    jobInDBAlready = False
     jobScriptLocation = obj['jobScriptLocation']
     jobScriptText = obj['jobScriptFile']
     ccOptionsCommandLine = obj['ccOptionsCommandLine']
@@ -402,9 +409,15 @@ def readyJobForScheduler(obj):
     jobMD5Hash = obj["jobMD5Hash"]
     userName = obj["userName"]
     password = obj["password"]
+    dateExpires = obj['dateExpires']
+    valKey = obj['valKey']
+    certLength = obj['certLength']
+    ccAccessKey = obj['ccAccessKey']
+    isRemoteSubmit = obj['isRemoteSubmit']
+
+    # For now we are going to use schedulerToUse as the Target Name and then we are going to have to figure out
     schedulerToUse = ccOptionsCommandLine["schedulerToUse"]
     schedType = ccOptionsCommandLine["schedType"]
-    isRemoteSubmit = obj["isRemoteSubmit"]
 
     #TODO Will need to obtain username and password here!
     decodedUserName = None
@@ -412,10 +425,7 @@ def readyJobForScheduler(obj):
 
     schedName = schedulerToUse
 
-    #get the instance ID
-    urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
-    instanceId = urlResponse.read()
-
+    # Get the requested target information.
     values = getSchedulerIPInformation(schedulerToUse, schedType)
     if values['status'] == 'success':
         schedulerIpAddress = values['payload']["schedulerIpAddress"]
@@ -753,10 +763,81 @@ def encodeString(k, field):
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
 
+def getInput(fieldName, description, possibleValues, exampleValues):
+    inputPrompt = "\nPlease enter a " + str(fieldName) + ". The " + str(fieldName) + " is " + str(description) + ".\n"
+    if possibleValues is not None:
+        inputPrompt += "The possible values are: "
+        tempString = ""
+        for x in range(len(possibleValues)):
+            if x < len(possibleValues) - 1:
+                tempString += str(possibleValues[x]) + ", "
+            else:
+                tempString += "and " + str(possibleValues[x]) + ".\n"
+        inputPrompt += tempString
+
+        done = False
+        attempts = 0
+        temp = ""
+        while attempts < 5 and not done:
+            temp = raw_input(inputPrompt)
+            if str(temp).lower() in possibleValues:
+                done = True
+            else:
+                print "Invalid selection.\n"
+                inputPrompt = "Please select a value from the list: " + tempString
+        if not done:
+            print "Maximum number of input tries reached, please try again."
+            sys.exit(0)
+        else:
+            return temp
+    elif exampleValues is not None:
+        inputPrompt += "Some example values include: "
+        for x in range(len(exampleValues)):
+            if x < len(exampleValues) - 1:
+                inputPrompt += str(exampleValues[x]) + ", "
+            else:
+                inputPrompt += "and " + str(exampleValues[x]) + ".\n"
+        temp = raw_input(inputPrompt)
+        return temp
+
+#TODO need to finish fleshing this out, this may not be exactly what we are going for here.........I'm not sure we may want each key to be it's own identity object
+def createIdentity(identityName, actions):
+    import uuid
+    identityUuid = str(uuid.uuid4())
+    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "keyInfo": [], "keyId": [], "identityName": str(identityName)}}
+    validActions = policies.getValidActionsAndRequiredAttributes()
+    for action in actions:
+        if action in validActions:
+            for attribute in validActions[action]:
+                obj['obj'][attribute] = validActions[action][attribute]
+        else:
+            return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to create the new ccqHub identity."}
+
+    # Save out the key to the DB, it has it's own object for storing key permissions and other information
+    res = dbInterface.handleObj(**obj)
+    if res['status'] != "success":
+        return {"status": "error", "payload": res['payload']}
+    else:
+        return {"status": "success", "message": "Successfully created the new ccqHubIdentity: " + str(identityName) + str("."), "payload": None}
+
+
+def createDefaultTargetsObject():
+    obj = {'action': "create", 'obj': {"RecType": "DefaultTargets", "name": "DefaultTargets"}}
+    for schedType in ccqHubSupportedSchedulerTypes:
+        obj['obj'][schedType] = "None"
+
+    # Save out the DefaultTarget object to the DB.
+    res = dbInterface.handleObj(**obj)
+    if res['status'] != "success":
+        return {"status": "error", "payload": res['payload']}
+    else:
+        return {"status": "success", "message": "Successfully created the deafultTarget object.", "payload": None}
+
 ########################################################################################################################
 #                                     Methods that deal with encryption and app Keys                                   #
 ########################################################################################################################
-def saveAndGenNewUserKey(userName, keyId, actions):
+#TODO this may need to be broken out into addUserNameToIdentity and generateAndAddKeyToIdentity.....not sure on that either
+def saveAndGenNewIdentityKey(identityName, keyId, actions):
     import hashlib
     import binascii
     import uuid
@@ -778,7 +859,7 @@ def saveAndGenNewUserKey(userName, keyId, actions):
             else:
                 attempts += 1
             if attempts >= 5:
-                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": None}
+                return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": None}
 
         dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
         #Add the newly generated key and the key's permissions to the key object
@@ -788,27 +869,27 @@ def saveAndGenNewUserKey(userName, keyId, actions):
 
         fullKey = str(keyUuid) + ":" + str(encryptAlgNum) + ":" + str(key)
 
-        if keyId is not None or userName is not None:
+        if keyId is not None or identityName is not None:
             # The user wants to add this key to the same object as the user or key name passed, we need to modify the object
             # The user cannot add any new actions to this Identity just a new key that has the same permissions
             queryString = ""
             if keyId is not None:
                 queryString = "keyId-" + str(keyId)
-            elif userName is not None:
-                queryString = "userName-" + str(userName)
+            elif identityName is not None:
+                queryString = "identityName-" + str(identityName)
             obj = {}
             res = queryObj(None, "RecType-Identity-" + str(queryString) + "-name-", "query", "json", "beginsWith")
             if res['status'] == "success":
                 objectList = res['payload']
                 for object in objectList:
-                    if userName is not None:
+                    if identityName is not None:
                         userNames = json.loads(object['userName'])
-                        userNames.append(str(userName))
+                        userNames.append(str(identityName))
                         object['userName'] = json.dumps(userNames)
                     elif keyId is not None:
                         decryptedKeyList = decryptString(object['keyInfo'])
                         if decryptedKeyList['status'] != "success":
-                            return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": decryptedKeyList['payload']}
+                            return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": decryptedKeyList['payload']}
                         else:
                             keyList = json.loads(decryptedKeyList['payload'])
                             keyList.append(fullKey)
@@ -819,7 +900,7 @@ def saveAndGenNewUserKey(userName, keyId, actions):
 
                             encryptedKeyObj = encryptString(json.dumps(keyList))
                             if encryptedKeyObj['status'] != "success":
-                                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": encryptedKeyObj['payload']}
+                                return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": encryptedKeyObj['payload']}
                             else:
                                 object['keyInfo'] = encryptedKeyObj['payload']
 
@@ -827,7 +908,7 @@ def saveAndGenNewUserKey(userName, keyId, actions):
         else:
             encryptedKeyObj = encryptString(json.dumps([str(fullKey)]))
             if encryptedKeyObj['status'] != "success":
-                return {"status": "error", "message": "Unable to generate the user app key please try again later.", "payload": encryptedKeyObj['payload']}
+                return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": encryptedKeyObj['payload']}
             else:
                 obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "keyInfo": encryptedKeyObj['payload'], "keyId": [str(keyUuid)]}}
                 validActions = policies.getValidActionsAndRequiredAttributes()

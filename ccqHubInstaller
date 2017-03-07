@@ -39,6 +39,7 @@ def main():
     parser.add_argument('-p', "--prefix", help="The location that you would like ccqHub to installed to, if running in non-root mode this argument is required. If running in root mode this argument is optional with the default install going to /opt/ccqHub", default=None)
     parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3", choices=["sqlite3"])
     parser.add_argument('-ap', '--addToPath', help="Specifies that ccqHub should add the path to the ccqHub binaries to the PATH so that they can be called from the commandline directly. If running as root, a script is added to /etc/profile.d to add to the PATH for all users, if running in non-root mode the modification is added to the user's ~/.bashrc. The default is to add the binaries to the PATH, this may require the user to logout and log back in for the changes to take effect.", default="yes", choices=["yes", "no"])
+    parser.add_argument('-sutm', '--singleUserTrustedMode', action='store_true', help="Specifies whether or not ccqHub is going to be running in Single User Trusted Mode. If this argument is specified, the installer will create an Identity to use for submitting jobs. This Identity will be a key file located in the {{prefix}}/.keys directory and will be able to submit jobs to any target added to ccqHub.")
 
     args = parser.parse_args()
 
@@ -46,6 +47,7 @@ def main():
     prefix = args.prefix
     databaseType = args.databaseType
     addToPath = args.addToPath
+    singleUserTrustedMode = args.singleUserTrustedMode
 
     if not nonRoot:
         values = credentials.checkAdminRights()
@@ -179,6 +181,12 @@ def main():
             print objectTableCreationResults['payload']
             sys.exit(0)
 
+    # Need to save out the defaultTarget object
+    results = ccqHubMethods.createDefaultTargetsObject()
+    if results['status'] != "success":
+        print results['payload']
+        sys.exit(0)
+
     print "Generating an encryption key for the ccqHub installation."
     values = ccqHubMethods.generateEncryptionKey()
     if values['status'] != "success":
@@ -187,22 +195,37 @@ def main():
     else:
         # Need to generate an API key that must be used in order to perform ccqHub management functions
         permissions = ["ccqHubAdmin"]
-        values = ccqHubMethods.saveAndGenNewUserKey(None, None, permissions)
+        values = ccqHubMethods.saveAndGenNewIdentityKey(None, None, permissions)
         if values['status'] != "success":
             print values['payload']['error']
             print values['payload']['traceback']
         else:
-            # Need to write out the API key to a file that can be accessed by the user. Going to be generated where the call was made to the setup program, and will be read only by the user who called the setup program
+            # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory
             generatedKey = values['payload']
             adminKeyFile = open(str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile), "w")
             adminKeyFile.write(str(generatedKey))
             adminKeyFile.close()
             os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile))
 
+        if singleUserTrustedMode:
+            # Need to generate a trusted key for submitting jobs that is separate from the admin key. This is the key that the user will utilize in their job submission.
+            permissions = ["submitJob"]
+            values = ccqHubMethods.saveAndGenNewIdentityKey(None, None, permissions)
+            if values['status'] != "success":
+                print values['payload']['error']
+                print values['payload']['traceback']
+            else:
+                # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory
+                generatedKey = values['payload']
+                adminKeyFile = open(str(prefix) + str(ccqHubMethods.ccqHubAdminJobSubmitKeyFile), "w")
+                adminKeyFile.write(str(generatedKey))
+                adminKeyFile.close()
+                os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminJobSubmitKeyFile))
+
         #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
         #TODO make this auto-start and make it a little more intelligent
-        from subprocess import Popen
-        Popen(['/usr/bin/python', str(prefix) + "/src/ccqHubWebServer.py"])
+        #from subprocess import Popen
+        #Popen(['/usr/bin/python', str(prefix) + "/src/ccqHubWebServer.py"])
 
 main()
 

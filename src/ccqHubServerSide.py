@@ -111,22 +111,6 @@ def ccqHubsub():
         password = None
         cert = values['payload']['cert']
 
-    spotPrice = ccOptionsParsed["spotPrice"]
-    useSpot = ccOptionsParsed["useSpot"]
-    volumeType = ccOptionsParsed["volumeType"]
-    if volumeType == "ssd":
-        volumeType = "gp2"
-    elif volumeType == "magnetic":
-        volumeType = "standard"
-    elif volumeType == "ssdiops":
-        return {"status": "error", "payload": {"message": "The volume type ssdiops is not currently supported by ccqsub at this time.", "cert": str(cert)}}
-    else:
-        return {"status": "error", "payload": {"message": "The volume type " + str(volumeType) + " is not a valid AWS EBS Volume type please try again.", "cert": str(cert)}}
-
-    schedulerToUse = ccOptionsParsed["schedulerToUse"]
-    print "schedulerToUse: " + str(schedulerToUse)
-    schedType = ccOptionsParsed["schedType"]
-
     #TODO implement pricing calls to the instances
     #justPrice = str(ccOptionsParsed["justPrice"])
 
@@ -159,25 +143,8 @@ def ccqHubsub():
     #
     #     return {"status": "success", "payload": {"message": "The AWS calculated for this job based upon the requested parameters is: " + str(output['payload']['instanceType']) + " with an estimated cost of $" + str(calculatedPrice), "cert": str(cert)}}
 
-    schedulerIpInfo = ccqsubMethods.getSchedulerIPInformation(schedulerToUse, schedType)
-    if schedulerIpInfo['status'] == 'success':
-        schedulerIpAddress = schedulerIpInfo['payload']["schedulerIpAddress"]
-        schedulerType = schedulerIpInfo['payload']['schedulerType']
-        schedulerName = schedulerIpInfo['payload']['schedName']
-        schedulerInstanceId = schedulerIpInfo['payload']['schedulerInstanceId']
-        schedulerInstanceName = schedulerIpInfo['payload']['instanceName']
-
-        ccOptionsParsed["schedulerToUse"] = str(schedulerName)
-        ccOptionsParsed['schedType'] = str(schedulerType)
-
-    else:
-        print schedulerIpInfo
-        return {"status": "error", "payload": {"message": schedulerIpInfo['payload'], "cert": str(cert)}}
-        #print "Unable to obtain the information about the " + str(schedulerToUse) + " Scheduler that was requested! Please try again in a few minutes!"
-        #sys.exit(0)
-
     #Already decoded up at the top so no reason to re-decode it.
-    obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "password": str(password), "isRemoteSubmit": "True"}
+    obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "password": str(password), "isRemoteSubmit": "True", "dateExpires": dateExpires, "valKey": valKey, "certLength": certLength, "ccAccessKey": ccAccessKey}
     values = ccqHubMethods.readyJobForScheduler(obj)
     return {"status": str(values['status']), "payload": {"message": values["payload"], "cert": str(cert)}}
 

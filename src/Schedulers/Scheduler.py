@@ -22,7 +22,7 @@ import ccqHubMethods
 import time
 import traceback
 
-clusterInformationLogFileLocation = ClusterMethods.clusterInformationLogFileLocation
+clusterInformationLogFileLocation = ccqHubMethods.clusterInformationLogFileLocation
 logFileDirectory = ClusterMethods.logFileDirectory
 scriptDirectory = ClusterMethods.scriptDirectory
 

@@ -68,4 +68,7 @@ def returnCompoundIndexDefinition():
             "targetName",
             "name"
         ]},
+        {"DefaultHubTargets": [
+            "name"
+        ]}
     ]
