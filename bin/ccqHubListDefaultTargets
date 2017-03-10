@@ -104,7 +104,6 @@ def main():
                     else:
                         # We need to print the default Targets for all of the supported scheduler types
                         for schedType in item:
-
                             if schedType != "name" and schedType != "RecType" and schedType != "sharingObj" and schedType != "hash_key" and schedType != "jobScriptText":
                                 schedulerTypesToDisplay[schedType] = str(item[schedType])
                 # Print the output

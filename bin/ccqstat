@@ -14,109 +14,64 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import argparse
+import base64
 import sys
 import json
 import traceback
 import urllib2
 import getpass
 import os
-import base64
 from datetime import datetime
+
+sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
+import ccqHubMethods
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
-ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
+ccqConfigFileLocationUser = str(os.path.expanduser('~')) + str("/ccqHub.config")
 ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.log")
 
-
-def ccqdel():
+def ccqstat():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud
-    parser = argparse.ArgumentParser(description="A utility that allows you to delete/kill jobs that have been submitted using the ccqsub command.")
-    parser.add_argument('-V', '--version', action='version', version='ccqdel (version 0.1)')
-    parser.add_argument('-j', '-j', help="The job Id of the job you want to delete/kill.", required=True)
-    parser.add_argument('-f', '--f', action='store_true', help="Force kill/purge the job from the Scheduler.")
-    parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline.", default="1")
+    parser = argparse.ArgumentParser(description="A utility that gives you the status of all the jobs that have been submitted using the ccqsub command.")
+    parser.add_argument('-V', '--version', action='version', version='ccqstat (version 0.1)')
+    parser.add_argument('-j', '-j', help="The job Id of the job you want to check on. If no job Id is specified then information about all jobs will be shown.", required=False, default="all")
 
-    #For use with app and ssh keys
-    parser.add_argument('-i', '-i', help="The path to the file containing the app/ssh key for use when validating the user on the requested resources.", default=None)
+    # TODO should scheduler/target name be a required argument??
+    parser.add_argument('-s', '-s', help="The name of the Scheduler that you want to see the jobs listed for.", required=False, default="default")
+
+    parser.add_argument('-v', '--v', action='store_true', help="Specifies the verbose option that lists more details about the job or job[s] requested.")
+    # Certificate Valid Time
+    parser.add_argument('-cl', metavar='<days_for_login_cert_to_be_valid_for>', help="Specifies the number of days that the generated ccq login certificate is valid for. This certificate is used so that you do not have to enter your username/password combination each time you submit a job. The default is 1 day, and the value must be an integer greater than or equal to 0. Setting the certificate valid length to 0 will disable the generation of login certificates. If the certLength variable is set in the ccq.config file then the value in the ccq.config file will override the value entered via the commandline.", default="1")
+    # Print out error messages for CCQ
+    parser.add_argument('-pe', action='store_true', help="Specifies that ccq should print out any ccq errors for the specified job to the commandline and exit.")
+
+    parser.add_argument('-i', '-i', help="The path to the file containing the app key for the user.", default=None)
+
+    # Remote system username, for use when utilizing an app key to authenticate
+    parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want to view the jobs for on the remote system.", default=None)
+
     args = parser.parse_args()
 
     jobId = args.j
-    jobForceDelete = args.f
+    verbose = args.v
+    schedulerName = args.s
     certLength = args.cl
+    printErrors = args.pe
     appKeyLocation = args.i
+    userName = args.ru
 
-    configFile = None
+    jobInformation = {}
 
-    try:
-        logFile = open(ccqLogFileLocation, "a")
-    except IOError as e:
-        #Can't open our log file so just write out to null device
-        logFile = open(os.devnull, "w")
-
-    try:
-        configFile = open(ccqConfigFileLocation, 'r')
-    except IOError as e:
-        #Can't find a ccqconfig file in our home directory so check the default location
-        try:
-            configFile = open(ccqConfigFileLocationDefault, 'r')
-        except IOError as e:
-            print "\nThe user specific ccq.config file was not found in " + str(ccqConfigFileLocation) + " and the default ccq.config file was not found in " + str(ccqConfigFileLocationDefault) + " please create the config file before submitting a job to ccq."
-            logFile.write(traceback.format_exc(str(e)))
-            print "\n"
-            sys.exit(0)
-
-    if configFile is not None:
-        try:
-            for line in configFile:
-                line = line.replace(" ", "")
-                splitLine = line.split('=')
-                if splitLine[0] == "certLength":
-                    parsedCommand = splitLine[1]
-                    certLength = parsedCommand[:len(parsedCommand)-1]
-                if splitLine[0] == "submitHost":
-                    parsedCommand = splitLine[1]
-                    submitHost = parsedCommand[:len(parsedCommand)-1]
-        except Exception as e:
-            print "There was an error parsing the ccq.config file, please verify the config file entries and try running your command again."
-            sys.exit(0)
+    values = ccqHubMethods.readSubmitHostOutOfConfigFile()
+    if values['status'] != "success":
+        print values['payload']
+        sys.exit(0)
     else:
-        sys.exit(0)
+        submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
-    try:
-        tempcertLength = int(certLength)
-        if tempcertLength < 0:
-            print "Invalid certificate valid for length. The number of days valid must be a valid integer greater than or equal to 0.\n"
-            sys.exit(0)
-    except:
-        print "Invalid certificate valid for length. The number of days valid must be a valid integer greater than or equal to 0.\n"
-        sys.exit(0)
-
-    valKey = "unpw"
-    userName = ""
-    password = ""
-    attempts = 0
-    validUser = False
-    isCert = False
-    dateExpires = ""
-    encodedUserName = ""
-    encodedPassword = ""
-
-    if os.path.isfile(ccqCertDefaultFileLocation) and int(certLength) != 0:
-        isCert = True
-        values = extractFieldsFromCert()
-        if values['status'] == "success":
-            valuesExtracted = values['payload']
-            encodedUserName = valuesExtracted['userName']
-            encodedPassword = valuesExtracted['password']
-            valKey = valuesExtracted['valKey']
-            dateExpires = valuesExtracted['dateExpires']
-        else:
-            pass
-            #logFile.write("Unable to read values from the ccq certificate file. Reverting to username/password for authentication.\n")
-
+    # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key, if so open the file and read in the key.
     ccAccessKey = ""
     try:
@@ -125,6 +80,21 @@ def ccqdel():
             ccAccessKey += line
     except Exception as e:
        ccAccessKey = None
+
+    #TODO only need the username if the job id is all (I think). If they are requesting information about a specific job then we have the username on the job object.
+    # User must give a username when running ccqstat
+    if userName is None and jobId == "all":
+        userName = ccqHubMethods.getInput("remote username", "username that you want to view the jobs for on the remote system", None, None)
+
+    valKey = "unpw"
+    #userName = ""
+    password = ""
+    attempts = 0
+    validUser = False
+    isCert = False
+    dateExpires = ""
+    encodedUserName = ""
+    encodedPassword = ""
 
     if not validUser:
         while attempts < 5 and not validUser:
@@ -135,8 +105,20 @@ def ccqdel():
                 encodedUserName = encodeString("ccqunfrval", str(userName))
                 valKey = "unpw"
 
-            url = "https://" + str(submitHost) + "/srv/ccqdel"
-            final = {"jobId": str(jobId), "userName": str(encodedUserName), "instanceId": None, "jobNameInScheduler": None, "password": str(encodedPassword), "jobForceDelete": jobForceDelete, 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey)}
+            # Need to get the target information here that we can pass to the backend.
+            targetAddresses = []
+            response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(schedulerName) + "-schedulerType-", "query", "json", "beginsWith")
+            if response['status'] == "success":
+                results = response['payload']
+                if len(results) > 0:
+                    print "Unable to find the Target/Scheduler " + str(schedulerName) + " that was specified. Please check and make sure the target you are requesting has been configured."
+                    sys.exit(0)
+                else:
+                    for target in results:
+                        targetAddresses = str(target['targetAddress']).split(",")
+
+            url = "https://" + str(submitHost) + "/srv/ccqHubstat"
+            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)
@@ -196,7 +178,8 @@ def extractFieldsFromCert():
         certFile = open(ccqCertDefaultFileLocation, "r")
         certObj = json.load(certFile)
         return {"status": "success", "payload": certObj}
+
     except:
         return {"status": "error", "payload": "There was a problem parsing the ccq certificate."}
 
-ccqdel()
+ccqstat()

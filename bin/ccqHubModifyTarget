@@ -31,11 +31,11 @@ def main():
     parser.add_argument('-tn', '--targetName', help="The name of the scheduler that is being modified.", default=None)
     parser.add_argument('-dta', '--deleteTargetAddress', help="This option allows the user to delete one or more target addresses from an existing target. Can be a single target address or a comma separated list of addresses.", default=None)
     parser.add_argument('-ata', '--addTargetAddress', help="This option allows the user to add one or more target addresses to an existing target. Can be a single target address or a comma separated list of addresses.", default=None)
-    parser.add_argument('-st', '--schedType', help="The type of scheduler that is being added.", default=None, choices=["torque", "slurm", "ccq"])
-    parser.add_argument('-p', '--protocol', help="The protocol that is used for submitting jobs at the target.", default=None, choices=["local", "ssh", "http"])
-    parser.add_argument('-a', '--auth', help="The authorization mode that is specified for the target.", default=None, choices=["appkey", "ssh", "username"])
-    parser.add_argument('-aai', '--addAuthId', help="This option allows the user to add one or more authorization identifiers to an existing target. This can be an app key, path to an ssh key, or a username. It can also be a single identifier or a comma separated list of identifiers.", default=None)
-    parser.add_argument('-dai', '--deleteAuthId', help="This option allows the user to delete one or more authorization identifiers from an existing target. This can be an app key, path to an ssh key, or a username. It can also be a single identifier or a comma separated list of identifiers.", default=None)
+    #parser.add_argument('-st', '--schedType', help="The type of scheduler that is being added.", default=None, choices=["torque", "slurm", "ccq"])
+    parser.add_argument('-p', '--protocol', help="The protocol that is used for submitting jobs at the target.", default=None, choices=ccqHubMethods.ccqHubSupportedProtocolTypes)
+    parser.add_argument('-a', '--auth', help="The authorization mode that is specified for the target.", default=None, choices=ccqHubMethods.ccqHubSupportedAuthenticationTypes)
+    parser.add_argument('-apk', '--addProxyKey', help="This option allows the user to add one or more proxy keys to an existing target. Proxy keys are currently only supported for ccq scheduler types. It can also be a single identifier or a comma separated list of identifiers.", default=None)
+    parser.add_argument('-dpk', '--deleteProxyKey', help="This option allows the user to delete one or more proxy keys from an existing target. Proxy keys are currently only supported for ccq scheduler types. It can also be a single identifier or a comma separated list of identifiers.", default=None)
     #parser.add_argument('-un', '--userName', help="The user name that can be used in place of a key to .", default=None)
 
     args = parser.parse_args()
@@ -44,11 +44,11 @@ def main():
     targetName = args.targetName
     targetAddressesToDelete = args.deleteTargetAddress
     targetAddressesToAdd = args.addTargetAddress
-    schedType = args.schedType
+    #schedType = args.schedType
     protocol = args.protocol
     auth = args.auth
-    authIdsToAdd = args.addAuthId
-    authIdsToDelete = args.deleteAuthId
+    proxyKeysToAdd = args.addProxyKey
+    proxyKeysToDelete = args.deleteProxyKey
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
@@ -77,7 +77,8 @@ def main():
                     for target in results:
                         # Load the lists from the two multivalued attributes into temp objects
                         targetAddresses = json.loads(target['targetAddress'])
-                        authIds = json.loads(target['authId'])
+                        proxyKeys = json.loads(target['proxyKey'])
+                        schedulerType = target['schedulerType']
 
                         # Loop through the target addresses to delete and remove them from the temp object
                         for targetAddress in targetAddressesToDelete.split(","):
@@ -88,18 +89,19 @@ def main():
                         for targetAddress in targetAddressesToAdd.split(","):
                             targetAddresses.append(str(targetAddress))
 
-                        # Loop through the authorization identifiers to delete and remove them from the temp object
-                        for authId in authIdsToDelete.split(","):
-                            if authId in authIds:
-                                authIds.remove(str(authId))
+                        if schedulerType == "ccq":
+                            # Loop through the authorization identifiers to delete and remove them from the temp object
+                            for proxyKey in proxyKeysToDelete.split(","):
+                                if proxyKey in proxyKeys:
+                                    proxyKeys.remove(str(proxyKey))
 
-                        # Loop through the authorization identifiers to add and add them from the temp object
-                        for authId in authIdsToAdd.split(","):
-                            authIds.append(str(authId))
+                            # Loop through the authorization identifiers to add and add them from the temp object
+                            for proxyKey in proxyKeysToAdd.split(","):
+                                proxyKeys.append(str(proxyKey))
 
                         # If a new scheduler type is specified then change it in the object
-                        if schedType is not None:
-                            target['schedulerType'] = str(schedType)
+                        #if schedType is not None:
+                        #    target['schedulerType'] = str(schedType)
 
                         # If a new auth type is specified then change it in the object
                         if auth is not None:
@@ -111,7 +113,7 @@ def main():
 
                         # Set the multivalued attributes to the new lists
                         target['targetAddress'] = targetAddresses
-                        target['authId'] = authIds
+                        target['proxyKey'] = proxyKeys
 
                         # Perform the modify/update operation on the actual DB
                         res = ccqHubMethods.handleObj("modify", target)

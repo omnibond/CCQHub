@@ -29,6 +29,7 @@ from datetime import timedelta
 import ccqHubVars
 import policies
 import threading
+import ConfigParser
 
 # sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 # from Slurm import SlurmScheduler
@@ -106,6 +107,8 @@ def generateTableNames():
 ########################################################################################################################
 #                                      Methods that deal with job management                                           #
 ########################################################################################################################
+
+
 def updateJobInDB(fieldsToAddToJob, jobId):
     #Update the job DB entry with the status of the job!
     done = False
@@ -140,6 +143,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
                 return {"status": "error", "payload": "Failed to save out job status!"}
             time.sleep(timeToWait)
             timeElapsed += timeToWait
+
 
 def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
     #Update the job DB entry with the status of the job!
@@ -190,6 +194,7 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
             time.sleep(timeToWait)
             timeElapsed += timeToWait
 
+
 def appendSuffixToJobScriptName(jobName):
     #There are conflicting job names who's MD5 hashes do not match so here we append a number to the end of the
     #jobName in order to make it unique
@@ -217,14 +222,15 @@ def appendSuffixToJobScriptName(jobName):
 
     return {"status": "success", "payload": {"jobName": jobName}}
 
+
 def compareJobScriptsMD5s(jobName, newJobMD5):
     conflictingJobMD5 = ""
     items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+        print items['payload']
+        return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
     for jobScript in items:
         conflictingJobMD5 = jobScript['jobMD5Hash']
@@ -235,14 +241,15 @@ def compareJobScriptsMD5s(jobName, newJobMD5):
     else:
         return {"status": "success", "payload": {"sameJob": False}}
 
+
 def checkUniqueness(typeToCompare, parameter, jobName=None):
     if typeToCompare == "jobScript":
-        items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
+        items = queryObj(None, "RecType-JobScript-name-" + str(parameter), "query", "dict", "beginsWith")
         if items['status'] == "success":
             items = items['payload']
         else:
-            print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+            print "Error: QueryErrorException! Unable to get Item."
+            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item."}
 
         for jobScript in items:
             if jobScript['name'] == parameter:
@@ -255,191 +262,16 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
             items = items['payload']
         else:
             print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+            return {'status': 'error', 'payload': items['payload']}
 
         for jobId in items:
-            if jobId['jobName'] == parameter or jobId['name'] == jobName:
+            if jobId['name'] == parameter or jobId['jobName'] == jobName:
                 return {"status": "success", "payload": {"isTaken": True}}
         return {"status": "success", "payload": {"isTaken": False}}
 
-def putJobScriptInDB(obj):
-    ccOptionsParsed = obj['ccOptionsParsed']
-    jobName = obj['jobName']
-    jobScriptText = obj['jobScriptText']
-    jobScriptLocation = obj['jobScriptLocation']
-    userName = obj['userName']
-    jobMD5Hash = obj['jobMD5']
 
-    obj = {}
-    obj['action'] = "create"
-    data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
-            'jobScriptLocation': str(jobScriptLocation), "dateFirstSubmitted": str(time.time()), "runTimes": {}, "numberOfTimesRun": str("0"), "createdByUser": str(userName), "jobMD5Hash": str(jobMD5Hash)}
-    for command in ccOptionsParsed:
-        if ccOptionsParsed[command] != "None":
-            data[command] = ccOptionsParsed[command]
-    obj['obj'] = data
-    response = dbInterface.handleObj(obj)
-    if response['status'] == "success" or response['status'] == "partial":
-        item = response['payload']
-        return {"status": "success", "payload": "Successfully saved the job script to the database!"}
-    else:
-        return {"status": "error", "payload": str(response['payload'])}
-
-def putJobToRunInDB(obj):
-    ccOptionsParsed = obj['ccOptionsCommandLine']
-    jobName = obj['jobName']
-    jobScriptText = obj['jobScriptText']
-    jobScriptLocation = obj['jobScriptLocation']
-    userName = obj['userName']
-    schedulerToUse = ccOptionsParsed["schedulerToUse"]
-    instanceType = ccOptionsParsed["instanceType"]
-    schedulerIP = obj['schedulerIP']
-
-    isRemoteSubmit = obj['isRemoteSubmit']
-
-    stdoutFileLocation = ccOptionsParsed["stdoutFileLocation"]
-    stderrFileLocation = ccOptionsParsed["stderrFileLocation"]
-    jobWorkDir = ccOptionsParsed["jobWorkDir"]
-
-    submitHostInstanceId = obj['submitHostInstanceId']
-    schedClusterName = obj['schedClusterName']
-
-    generatedJobId = ""
-    done = False
-    while not done:
-        jobNums = [randint(0,9) for p in range(0,4)]
-        for digit in jobNums:
-          generatedJobId +=str(digit)
-
-        values = checkUniqueness("jobId", generatedJobId)
-        if values['status'] == "success" and not values['payload']['isTaken']:
-            done = True
-
-    suffixToAddToJobName = 0
-    done = False
-    while not done:
-        if suffixToAddToJobName == 0:
-            values = checkUniqueness("jobId", generatedJobId, jobName)
-        else:
-            jobName = str(jobName)+str(suffixToAddToJobName)
-            values = checkUniqueness("jobId", generatedJobId, str(jobName))
-        if values['status'] == "success" and not values['payload']['isTaken']:
-            done = True
-        suffixToAddToJobName += 1
-
-    obj = {'action': "create"}
-    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "schedulerUsed": str(schedulerToUse), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "schedulerIP": str(schedulerIP), "stderrFileLocation": str(stderrFileLocation) , "stdoutFileLocation": str(stdoutFileLocation), "submitHostInstanceId": str(submitHostInstanceId), "schedClusterName": str(schedClusterName), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir)}
-    for command in ccOptionsParsed:
-        if ccOptionsParsed[command] != "None":
-            data[command] = ccOptionsParsed[command]
-    obj['obj'] = data
-    response = dbInterface.handleObj(obj)
-    if response['status'] == "success" or response['status'] == "partial":
-        item = response['payload']
-
-        done = False
-        timeToWait = 10
-        maxTimeToWait = 120
-        timeElapsed = 0
-        while not done:
-            try:
-                items = dbInterface.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
-                if items['status'] == "success":
-                    items = items['payload']
-                else:
-                    print "Error: QueryErrorException! Unable to get Item!"
-                    return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
-
-                for jobScript in items:
-                    jobScript['numberOfTimesRun'] = int(jobScript['numberOfTimesRun'])+1
-                    jobScript.save()
-                done = True
-            except Exception as e:
-                if timeElapsed >= maxTimeToWait:
-                    return {"status": "error", "payload": "Failed to update number of times the job has run!"}
-                time.sleep(timeToWait)
-                timeElapsed += timeToWait
-
-        return {"status": "success", "payload": {"jobId": str(generatedJobId)}}
-    else:
-        return {"status": "error", "payload": {str(response['payload'])}}
-
-def getSchedulerIPInformation(schedName, schedType):
-    if schedName == "default":
-        items = dbInterface.queryObj(None, "RecType-Scheduler-", "query", "dict", "beginsWith")
-        if items['status'] == "success":
-            items = items['payload']
-        else:
-            print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
-
-        for scheduler in items:
-            if schedType.lower() == str(scheduler['schedType']).lower() and scheduler['defaultScheduler'] == "true":
-                isAutoscaling = False
-                if scheduler['scalingType'] == "autoscaling":
-                    isAutoscaling = True
-                return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP']), "clusterName": str(scheduler['clusterName']), "schedulerType": str(scheduler['schedType']), "schedName": str(scheduler['schedName']), "isAutoscaling": isAutoscaling, "instanceName": scheduler['instanceName'], "isDefaultScheduler": scheduler['defaultScheduler'], "schedulerInstanceId": scheduler["instanceID"]}}
-
-    items = dbInterface.queryObj(None, "RecType-Scheduler-schedName-" + str(schedName) + "-", "query", "dict", "beginsWith")
-    if items['status'] == "success":
-        items = items['payload']
-    else:
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
-
-    for scheduler in items:
-        if schedType.lower() == "default" or schedType.lower() == str(scheduler['schedType']).lower():
-            isAutoscaling = False
-            if scheduler['scalingType'] == "autoscaling":
-                isAutoscaling = True
-            return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP']), "clusterName": str(scheduler['clusterName']), "schedulerType": str(scheduler['schedType']), "schedName": str(scheduler['schedName']), "isAutoscaling": isAutoscaling, "instanceName": scheduler['instanceName'], "isDefaultScheduler": scheduler['defaultScheduler'], "schedulerInstanceId": scheduler["instanceID"]}}
-
-    #Need to eventually figure out what the default Scheduler for the different types are and if a Scheduler Name isn't
-    #specified then we will choose the default Scheduler for that certain type of job
-
-    return {'status': 'error', 'payload': "The requested scheduler was not found in the Database!"}
-
-# This method will only be called when we are submitting locally and therefore shouldn't need to do any of the cert auth
-# stuff because it will be being called locally only.
-def readyJobForScheduler(obj):
-    jobScriptLocation = obj['jobScriptLocation']
-    jobScriptText = obj['jobScriptFile']
-    ccOptionsCommandLine = obj['ccOptionsCommandLine']
-    jobName = obj["jobName"]
-    jobMD5Hash = obj["jobMD5Hash"]
-    userName = obj["userName"]
-    password = obj["password"]
-    dateExpires = obj['dateExpires']
-    valKey = obj['valKey']
-    certLength = obj['certLength']
-    ccAccessKey = obj['ccAccessKey']
-    isRemoteSubmit = obj['isRemoteSubmit']
-
-    # For now we are going to use schedulerToUse as the Target Name and then we are going to have to figure out
-    schedulerToUse = ccOptionsCommandLine["schedulerToUse"]
-    schedType = ccOptionsCommandLine["schedType"]
-
-    #TODO Will need to obtain username and password here!
-    decodedUserName = None
-    decodedPassword = None
-
-    schedName = schedulerToUse
-
-    # Get the requested target information.
-    values = getSchedulerIPInformation(schedulerToUse, schedType)
-    if values['status'] == 'success':
-        schedulerIpAddress = values['payload']["schedulerIpAddress"]
-        clusterName = values['payload']['clusterName']
-        schedName = values['payload']['schedName']
-        isAutoscaling = values['payload']['isAutoscaling']
-        schedulerInstanceId = values['payload']['schedulerInstanceId']
-        schedulerInstanceName = values['payload']['instanceName']
-    else:
-        return {"status": "error", "payload": values['payload']}
-    #print schedulerIpAddress
-    #print clusterName
-
-    obj = {"clusterName": str(clusterName), "ccOptionsParsed": ccOptionsCommandLine}
+def saveJobScript(jobScriptLocation, jobScriptText, ccOptionsCommandLine, jobName, jobMD5Hash, userName, targetName, identity, keyPrefix):
+    jobInDBAlready = False
     values = checkUniqueness("jobScript", jobName)
     if values['status'] == 'success' and values['payload']['isTaken']:
         results = compareJobScriptsMD5s(jobName, jobMD5Hash)
@@ -457,22 +289,89 @@ def readyJobForScheduler(obj):
 
     if not jobInDBAlready:
         #Save the job script object to the DB
-        obj = {"clusterName": str(clusterName), "jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(decodedUserName)}
-        values = putJobScriptInDB(obj)
+        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(userName), "targetName": str(targetName), "identity": str(identity), "keyPrefix": str(keyPrefix)}
+        values = putJobScriptInDB(**obj)
         if values['status'] == 'success':
             print values['payload']
         else:
             return {"status": "error", "payload": values['payload']}
 
-    #Save the running job to the DB
-    newObj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(decodedUserName), "password": str(decodedPassword), "schedulerIP": str(schedulerIpAddress), "isRemoteSubmit": str(isRemoteSubmit), "submitHostInstanceId": str(instanceId), "schedClusterName": str(clusterName)}
-    values = putJobToRunInDB(newObj)
-    if values['status'] != 'success':
-        return {"status": "error", "payload": values['payload']}
-    else:
-        jobId = values['payload']['jobId']
 
-    return {"status": "success", "payload": "The job has successfully been submitted to the scheduler " + str(schedName) + " and is currently being processed! The job id is: " + str(jobId) + " you can use this id to look up the job status using the ccqstat utility."}
+def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName, isRemoteSubmit, targetName, identity):
+    instanceType = ccOptionsParsed["instanceType"]
+    jobWorkDir = ccOptionsParsed["jobWorkDir"]
+
+    generatedJobId = ""
+    done = False
+    while not done:
+        jobNums = [randint(0, 9) for p in range(0, 4)]
+        for digit in jobNums:
+          generatedJobId += str(digit)
+
+        values = checkUniqueness("jobId", generatedJobId)
+        if values['status'] == "success" and not values['payload']['isTaken']:
+            done = True
+
+    suffixToAddToJobName = 0
+    done = False
+    while not done:
+        if suffixToAddToJobName == 0:
+            values = checkUniqueness("jobId", generatedJobId, jobName)
+        else:
+            jobName = str(jobName)+str(suffixToAddToJobName)
+            values = checkUniqueness("jobId", generatedJobId, str(jobName))
+        if values['status'] == "success" and not values['payload']['isTaken']:
+            done = True
+        suffixToAddToJobName += 1
+
+    if str(ccOptionsParsed["stdoutFileLocation"]) == "default":
+        stdoutFileLocation = str(jobWorkDir) + str(jobName) + str(generatedJobId) + ".o"
+    else:
+        stdoutFileLocation = ccOptionsParsed["stdoutFileLocation"]
+    if str(ccOptionsParsed["stderrFileLocation"]) == "default":
+        stderrFileLocation = str(jobWorkDir) + str(jobName) + str(generatedJobId) + ".e"
+    else:
+        stderrFileLocation = ccOptionsParsed["stderrFileLocation"]
+
+    obj = {'action': "create"}
+    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "targetName": str(targetName), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText), 'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "stderrFileLocation": str(stderrFileLocation), "stdoutFileLocation": str(stdoutFileLocation), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir), "status": "Pending", "identity": str(identity)}
+    for command in ccOptionsParsed:
+        if ccOptionsParsed[command] != "None":
+            data[command] = ccOptionsParsed[command]
+    obj['obj'] = data
+    response = handleObj(obj)
+    if response['status'] == "success" or response['status'] == "partial":
+        item = response['payload']
+        done = False
+        timeToWait = 10
+        maxTimeToWait = 120
+        timeElapsed = 0
+        while not done:
+            try:
+                items = queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+                if items['status'] == "success":
+                    items = items['payload']
+                else:
+                    print "Error: QueryErrorException! Unable to get Item."
+                    return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item."}
+
+                for jobScript in items:
+                    jobScript['numberOfTimesRun'] = int(jobScript['numberOfTimesRun'])+1
+                    jobScript.save()
+                done = True
+            except Exception as e:
+                print traceback.format_exc(e)
+                if timeElapsed >= maxTimeToWait:
+                    return {"status": "error", "payload": "Failed to update number of times the job has run."}
+                time.sleep(timeToWait)
+                timeElapsed += timeToWait
+
+        return {"status": "success", "payload": {"jobId": str(generatedJobId)}}
+    else:
+        print response['payload']['error']
+        print response['payload']['traceback']
+        return {"status": "error", "payload": {str(response['payload']['error'])}}
+
 
 def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCert, schedName=None):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
@@ -576,6 +475,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
         return {"status": "partial-failure", "payload": "There was an error encountered trying to get the verbose information from the scheduler! The job you requested information on is running on a Cluster that is not the one you are currently using!\n"
                                                         "The non-verbose status of the job " + str(jobId) + " is " + str(jobInformation['status'])}
 
+
 def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete, isCert):
     #This will hit the Scheduler Web Service with the job parameters and object and then timeout and return the
     #generated job Id
@@ -640,6 +540,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
     else:
         return {"status": "partial-failure", "payload": "There was an error encountered trying to delete the job! The job you want to delete on is running on a Cluster that is not the one you are currently using!\n"}
 
+
 def getSchedulerAndSchedTypeFromJob(jobId):
     results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
     if results['status'] == "success":
@@ -665,6 +566,7 @@ def getSchedulerAndSchedTypeFromJob(jobId):
             return {'status': 'error', 'payload': "Unable to get scheduler information via the Job entry in the DB!"}
 
     return {"status": "error", "payload": "The job Id requested does not exist in the Database!"}
+
 
 def getSchedulerIpByName(schedName):
     if schedName == "default":
@@ -695,6 +597,7 @@ def getSchedulerIpByName(schedName):
     #specified then we will choose the default Scheduler for that certain type of job
 
     return {'status': 'error', 'payload': "The requested scheduler was not found in the Database!"}
+
 
 def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, instanceVolumeType, purchaseType, isSpotJob, spotPrice):
     try:
@@ -754,14 +657,6 @@ def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, in
         print "Unable to determine price! Not running on a CC instance!"
         return {"status": "error", "payload": {"error": "Unable to calculate pricing for the job! CCQ not running on a CC instance!", "traceback": str(traceback.format_exc(e))}}
 
-def encodeString(k, field):
-    enchars = []
-    for i in xrange(len(field)):
-        k_c = k[i % len(k)]
-        enc = chr(ord(field[i]) + ord(k_c) % 256)
-        enchars.append(enc)
-    ens = "".join(enchars)
-    return base64.urlsafe_b64encode(ens)
 
 def getInput(fieldName, description, possibleValues, exampleValues):
     inputPrompt = "\nPlease enter a " + str(fieldName) + ". The " + str(fieldName) + " is " + str(description) + ".\n"
@@ -769,7 +664,9 @@ def getInput(fieldName, description, possibleValues, exampleValues):
         inputPrompt += "The possible values are: "
         tempString = ""
         for x in range(len(possibleValues)):
-            if x < len(possibleValues) - 1:
+            if len(possibleValues) == 1:
+                tempString = str(possibleValues[x]) + ".\n"
+            elif x < len(possibleValues) - 1:
                 tempString += str(possibleValues[x]) + ", "
             else:
                 tempString += "and " + str(possibleValues[x]) + ".\n"
@@ -793,12 +690,15 @@ def getInput(fieldName, description, possibleValues, exampleValues):
     elif exampleValues is not None:
         inputPrompt += "Some example values include: "
         for x in range(len(exampleValues)):
+            if len(exampleValues) == 1:
+                inputPrompt += str(exampleValues[x]) + ".\n"
             if x < len(exampleValues) - 1:
                 inputPrompt += str(exampleValues[x]) + ", "
             else:
                 inputPrompt += "and " + str(exampleValues[x]) + ".\n"
         temp = raw_input(inputPrompt)
         return temp
+
 
 #TODO need to finish fleshing this out, this may not be exactly what we are going for here.........I'm not sure we may want each key to be it's own identity object
 def createIdentity(identityName, actions):
@@ -833,9 +733,69 @@ def createDefaultTargetsObject():
     else:
         return {"status": "success", "message": "Successfully created the deafultTarget object.", "payload": None}
 
+
+def formatCcqstatOutput(jobs):
+    headerText = "Id            Name                        Scheduler           Status\n"
+    headerText += "--------------------------------------------------------------------\n"
+    returnString = ""
+    jobTimes = {}
+    statusOfEachJob = {}
+    for job in jobs:
+        jobTimes[job['name']] = job['dateSubmitted']
+        jobId = job['name']
+        jobName = job['jobName']
+        jobStatus = job['status']
+        jobScheduler = job['schedulerUsed']
+        if len(jobId) > 5:
+            #Job Id is too long and has to be truncated for formatting purposes and padding added to the end
+            jobId = str(jobId[0:5]) + "..." + (" " * 6)
+        else:
+            #Make the job id 8 chars long and then add the padding to it
+            jobId = jobId + (" " * (8-len(jobId))) + (" " * 6)
+        if len(jobName) > 17:
+            #Job name is too long and has to be truncated for formatting purposes and padding added to the end
+            jobName = str(jobName[0:17]) + "..." + (" " * 8)
+        else:
+            #Make the job name 20 chars long and then add the padding to it
+            jobName = jobName + (" " * (20-len(jobName))) + (" " * 8)
+        if len(jobScheduler) > 12:
+            # Job name is too long and has to be truncated for formatting purposes and padding added to the end
+            jobScheduler = str(jobScheduler[0:12]) + "..." + (" " * 5)
+        else:
+            # Make the job name 12 chars long and then add the padding to it
+            jobScheduler = jobScheduler + (" " * (15 - len(jobScheduler))) + (" " * 5)
+
+        statusOfEachJob[job['name']] = str(jobId) + str(jobName) + str(jobScheduler) + str(jobStatus) + "\n"
+
+    if len(statusOfEachJob) > 0:
+        sortedJobsBySubmissionTime = sorted(jobTimes.items(), key=lambda x: x[1])
+        for sortedJob in sortedJobsBySubmissionTime:
+            returnString += statusOfEachJob[sortedJob[0]]
+        return {"status": "success", "payload": headerText + returnString}
+    else:
+        return {"status": "success", "payload": "There are currently no jobs in the queue."}
+
+
+def readSubmitHostOutOfConfigFile():
+    parser = ConfigParser.ConfigParser()
+
+    if os.path.isfile(os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"):
+        ccqHubConfigFileLocation = os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"
+        try:
+            parser.read(ccqHubConfigFileLocation)
+            submitHost = parser.get("Web Server", "host")
+            port = parser.get("Web Server", "port")
+            return {"status": "success", "payload": {"port": port, "host": str(submitHost)}}
+        except Exception as e:
+            return {"status": "error", "payload": "An error occurred trying to read the configuration file.\n" + str(traceback.format_exc(e))}
+    else:
+        return {"status": "error", "payload": "Unable to read the host from the configuration file."}
+
 ########################################################################################################################
 #                                     Methods that deal with encryption and app Keys                                   #
 ########################################################################################################################
+
+
 #TODO this may need to be broken out into addUserNameToIdentity and generateAndAddKeyToIdentity.....not sure on that either
 def saveAndGenNewIdentityKey(identityName, keyId, actions):
     import hashlib
@@ -928,6 +888,7 @@ def saveAndGenNewIdentityKey(identityName, keyId, actions):
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem generating the key for ccqHub root access.", "traceback": traceback.format_exc(e)}}
 
+
 def encryptString(data):
     # Perform the actual encryption of the data utilizing the key that is provided
     try:
@@ -944,6 +905,7 @@ def encryptString(data):
         return {"status": "success", "payload": encData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem encrypting the string.", "traceback": str(traceback.format_exc(e))}}
+
 
 def generateEncryptionKey():
     # Generate the key to be used for encryption if there is not one created. This will be placed in a file that is only
@@ -982,6 +944,7 @@ def generateEncryptionKey():
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem generating the encryption key for ccqHub.", "traceback": str(traceback.format_exc(e))}}
 
+
 def retrieveEncryptionKey():
     try:
         keyFile = open(str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyFile), "r")
@@ -994,6 +957,7 @@ def retrieveEncryptionKey():
         return {"status": "success", "payload": keyLine}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem trying to obtain the key from the specified file.", "traceback": str(traceback.format_exc(e))}}
+
 
 def decryptString(data):
     try:
@@ -1010,11 +974,14 @@ def decryptString(data):
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
 
+
 def validateAppKey(ccAccessKey):
+    identityUuid = None
     response = queryObj(None, "RecType-Identity-keyId-" + str(ccAccessKey.split(":")[0]) + "-name-", "query", "json", "beginsWith")
     if response['status'] == "success":
         results = response['payload']
         for tempItem in results:
+            identityUuid = tempItem['name']
             try:
                 # Need to load the list of keys from the user and decrypt the object
                 results = decryptString(tempItem['keyInfo'])
@@ -1037,9 +1004,7 @@ def validateAppKey(ccAccessKey):
                 #else:
                 #    certDecodedPass = certDecodedPass['payload']
                 #    certDecodedUser = tempItem['userName']
-                certDecodedPass = "something"
-                certDecodedUser = "else"
-                return {"status": "success", "payload": "Successfully validated the key."}
+                return {"status": "success", "payload": {"message": "Successfully validated the key.", "identity": str(identityUuid)}}
             else:
                 #The AccessKey provided is not valid return error
                 return {"status": "error", "payload": "App Key not valid."}
@@ -1050,3 +1015,14 @@ def validateAppKey(ccAccessKey):
     else:
         #If the APIKey object isn't found in the DB return not valid
         return {"status": "error", "payload": "App Key not valid."}
+
+
+def encodeString(k, field):
+    enchars = []
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        enc = chr(ord(field[i]) + ord(k_c) % 256)
+        enchars.append(enc)
+    ens = "".join(enchars)
+    return base64.urlsafe_b64encode(ens)
+

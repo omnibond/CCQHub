@@ -26,6 +26,9 @@ import getpass
 from datetime import date, datetime
 import commands
 
+sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
+import ccqHubMethods
+
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
 ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
@@ -39,6 +42,10 @@ def ccqsub():
 
     # For use with app and ssh keys
     parser.add_argument('-i', '-i', help="The path to the file containing the app/ssh key for use when validating the user on the requested resources.", default=None)
+
+    # Remote system username, for use when utilizing an app key to authenticate
+    parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want the job to run as on the remote system.", default=None)
+
 
     # If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
     # Job script file location
@@ -54,9 +61,9 @@ def ccqsub():
     # Memory Per Instance
     parser.add_argument('-mem', metavar='<mem_size_in_MB>', type=int, help="The amount of memory (in MB) per instance. The default setting is 1000 MB (1GB) per instance.", default=1000)
     # Scheduler To use
-    parser.add_argument('-s', metavar='<name_of_scheduler_to_use>', help="Specifies the name of the Scheduler that you want to use. The default value is to use the default Scheduler for the Scheduler type you have requested. This default variable can be set using the ccq.config file with the variable defaultScheduler=<schedulerName>.", default="default")
+    parser.add_argument('-s', metavar='<name_of_target/scheduler_to_use>', help="Specifies the name of the Scheduler/Target that you want to use. The default value is to use the default Scheduler/Target for the Scheduler type you have requested. The default Scheduler/Target can be changed utilizing the ccqHubModifyDefaultTargets utility.", default="default")
     # Scheduler Type
-    parser.add_argument('-st', metavar='Torque|Condor|SGE|SLURM|default', help="Specifies the type of Scheduler that you want to use. The accepted values are Torque, Condor, SGE, and SLURM. If the Scheduler type is not specified with a job script then ccqsub will attempt to figure out from the job script what type of Scheduler the job is to be run on. If no job script is submitted then the value will default to the default Scheduler for the Cluster", default="default", choices=["Torque", "Condor", "SGE", "SLURM", "default"])
+    parser.add_argument('-st', metavar='Torque|SLURM|ccq|default', help="Specifies the type of Scheduler that you want to use. The accepted values are Torque, Condor, SGE, and SLURM. If the Scheduler type is not specified with a job script then ccqsub will attempt to figure out from the job script what type of Scheduler the job is to be run on. If no job script is submitted then the value will default to the default Scheduler for the Cluster", default="default", choices=["Torque", "ccq", "SLURM", "default"])
     # Use Spot Instances
     parser.add_argument('-us', metavar='yes|no', help="Use spot instances instead of dedicated instances. The default option is \"no\"", default="no", choices=["yes", "no"])
     # Spot Instance Price
@@ -98,6 +105,7 @@ def ccqsub():
     volumeType = args.vt
     certLength = args.cl
     justPrice = args.pr
+    userName = args.ru
 
     stdoutFileLocation = args.o
     stderrFileLocation = args.e
@@ -106,49 +114,15 @@ def ccqsub():
 
     currentDirectoryToStoreOutput = os.getcwd()
 
-    try:
-        logFile = open(ccqLogFileLocation, "a")
-    except IOError as e:
-        #Can't open our log file so just write out to null device
-        logFile = open(os.devnull, "w")
-
-    try:
-        configFile = open(ccqConfigFileLocation, 'r')
-    except IOError as e:
-        #Can't find a ccqconfig file in our home directory so check the default location
-        try:
-            configFile = open(ccqConfigFileLocationDefault, 'r')
-        except IOError as e:
-            print "\nThe user specific ccq.config file was not found in " + str(ccqConfigFileLocation) + " and the default ccq.config file was not found in " + str(ccqConfigFileLocationDefault) + " please create the config file before submitting a job to ccq."
-            logFile.write(traceback.format_exc(str(e)))
-            print "\n"
-            sys.exit(0)
-
-    if configFile is not None:
-        try:
-            for line in configFile:
-                line = line.replace(" ", "")
-                splitLine = line.split('=')
-                if splitLine[0] == "certLength":
-                    parsedCommand = splitLine[1]
-                    certLength = parsedCommand[:len(parsedCommand)-1]
-                if splitLine[0] == "submitHost":
-                    parsedCommand = splitLine[1]
-                    submitHost = parsedCommand[:len(parsedCommand)-1]
-        except Exception as e:
-            print "There was an error parsing the ccq.config file, please verify the config file entries and try running your command again."
-            sys.exit(0)
+    values = ccqHubMethods.readSubmitHostOutOfConfigFile()
+    if values['status'] != "success":
+        print values['payload']
+        sys.exit(0)
     else:
-        sys.exit(0)
+        submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
-    try:
-        tempcertLength = int(certLength)
-        if tempcertLength < 0:
-            print "Invalid certificate valid for length. The number of days valid must be a valid integer greater than or equal to 0.\n"
-            sys.exit(0)
-    except:
-        print "Invalid certificate valid for length. The number of days valid must be a valid integer greater than or equal to 0.\n"
-        sys.exit(0)
+    if userName is None:
+        userName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
 
     if jobScriptLocation is not None:
         status, output = commands.getstatusoutput("pwd")
@@ -235,61 +209,12 @@ def ccqsub():
                 elif slurmLineCount > pbsLineCount and slurmLineCount > sgeLineCount:
                     ccOptionsParsed['schedType'] = "SLURM"
                     schedType = "SLURM"
-                elif sgeLineCount > pbsLineCount and sgeLineCount > slurmLineCount:
-                    ccOptionsParsed['schedType'] = "SGE"
-                    schedType = "SGE"
+                # elif sgeLineCount > pbsLineCount and sgeLineCount > slurmLineCount:
+                #     ccOptionsParsed['schedType'] = "SGE"
+                #     schedType = "SGE"
                 else:
-                    try:
-                        import ClusterMethods
-                        import ccqMethods
-                        information = ccqMethods.getClusterNameFromInstance()
-                        if information['status'] != "success":
-                            return {'status': 'error', 'payload': "There was an error trying to obtain the clusterName that is required for choosing a scheduler!"}
-                        else:
-                            clusterName = information['payload']
-                        schedulerList = []
-                        #Get list of schedulers and types and then ask the user to pick which one to submit to
-                        items = ClusterMethods.queryObject(None, "RecType-Scheduler-clusterName-" + str(clusterName), "query", "dict", "beginsWith")
-                        if items['status'] == "success":
-                            items = items['payload']
-                        else:
-                            print "Unable to get list of schedulers available for submission please either specify a scheduler to submit to using the -s directive or specify a type of scheduler to submit to using the -st directive."
-                            sys.exit(0)
-
-                        counter = 1
-                        schedString = ""
-                        for scheduler in items:
-                            schedulerList.append(scheduler)
-                            schedString += str(counter) + " " + str(scheduler['schedName'] + "\n")
-                            counter += 1
-
-                        if len(schedulerList) == 1:
-                            ccOptionsParsed['schedType'] = schedulerList[0]['schedType']
-                            schedType = schedulerList[0]['schedType']
-                        else:
-                            maxTries = 5
-                            tryCounter = 0
-                            completed = False
-                            while not completed:
-                                print "\nccq was unable to determine the type of your job.\nPlease enter the number that corresponds to the scheduler that you want to submit your job to:"
-                                print str(schedString)
-                                schedulerChoice = raw_input()
-                                if schedulerChoice.isdigit():
-                                    if counter > int(schedulerChoice) > 0:
-                                        ccOptionsParsed['schedType'] = schedulerList[int(schedulerChoice) - 1]['schedType']
-                                        ccOptionsParsed['schedulerToUse'] = schedulerList[int(schedulerChoice) - 1]['schedName']
-                                        schedType = schedulerList[int(schedulerChoice) - 1]['schedType']
-                                        completed = True
-                                else:
-                                    tryCounter += 1
-                                    if tryCounter > maxTries:
-                                        print "Too many invalid options selected, please try submitting your job again."
-                                        sys.exit(0)
-                                    else:
-                                        print "Invalid selection, please try again.\n"
-                    except Exception as e:
-                        print "\nCannot determine the type of scheduler to submit this job to. Please re-submit the job and specify the scheduler you want to submit to using the -s directive in your job script, via the command line, or via the ccq.config file. You may also specify the type of job (Torque, SGE, SLURM, Condor, PBSPro) using the -st directive in your job script, via command line arguments, or via the ccq.config file.\n"
-                        sys.exit(0)
+                    print "\nCannot determine the type of scheduler/target to submit this job to. Please re-submit the job and specify the scheduler/target you want to submit to using the -s directive in your job script or via the command line. You may also specify the type of job (Torque, SGE, SLURM, Condor, PBSPro) using the -st directive in your job script or via command line arguments.\n"
+                    sys.exit(0)
 
         except IOError as e:
             print "The job script file that was specified (" + str(jobScriptLocation) + ") does not exist. Please check the file path and try again.\n"
@@ -316,7 +241,7 @@ def ccqsub():
         jobMD5Hash = values['payload']['md5']
 
     valKey = "unpw"
-    userName = ""
+    #userName = ""
     password = ""
     attempts = 0
     validUser = False
@@ -325,19 +250,7 @@ def ccqsub():
     encodedUserName = ""
     encodedPassword = ""
 
-    if os.path.isfile(ccqCertDefaultFileLocation) and int(certLength) != 0:
-        isCert = True
-        values = extractFieldsFromCert()
-        if values['status'] == "success":
-            valuesExtracted = values['payload']
-            encodedUserName = valuesExtracted['userName']
-            encodedPassword = valuesExtracted['password']
-            valKey = valuesExtracted['valKey']
-            dateExpires = valuesExtracted['dateExpires']
-        else:
-            pass
-            #logFile.write("Unable to read values from the ccq certificate file. Reverting to username/password for authentication.\n")
-
+    # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key, if so open the file and read in the key.
     ccAccessKey = ""
     try:
@@ -356,8 +269,20 @@ def ccqsub():
                 encodedUserName = encodeString("ccqunfrval", str(userName))
                 valKey = "unpw"
 
-            url = "https://" + str(submitHost) + "/srv/ccqsub"
-            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey)}
+            # Need to get the target information here that we can pass to the backend.
+            targetAddresses = []
+            response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(schedulerToUse) + "-schedulerType-", "query", "json", "beginsWith")
+            if response['status'] == "success":
+                results = response['payload']
+                if len(results) > 0:
+                    print "Unable to find the Target/Scheduler " + str(schedulerToUse) + " that was specified. Please check and make sure the target you are requesting has been configured."
+                    sys.exit(0)
+                else:
+                    for target in results:
+                        targetAddresses = str(target['targetAddress']).split(",")
+
+            url = "https://" + str(submitHost) + "/srv/ccqHubSub"
+            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerToUse), "targetAddresses": str(targetAddresses)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)

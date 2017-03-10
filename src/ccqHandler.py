@@ -44,18 +44,25 @@ tempJobOutputLocation = ClusterMethods.tempJobOutputLocation
 logDirectory = ClusterMethods.logFileDirectory
 
 #####################################
-#  Possible CCQ States and meanings #
+#  Possible CCQHub States and meanings #
 #####################################
-# Pending - The job has been submitted via ccqsub and is in the DB but has not yet been processed by ccqLauncher.py
-# CreatingCG - ccqLauncher is in the process of creating a new compute group for the job
-# ExpandingCG - ccqLauncher is in the process of expanding an existing compute group to accommodate the job
-# Provisioning - ccqLauncher is currently checking to ensure the user for the job is on the machine and that the instances have been added to the scheduler
-# CCQueued - ccqLauncher was originally expanding an existing compute group but found instances that were ready before the expansion happened so now it is using the ready instances and not expanding the compute group
-# deleting - the job has been deleted via ccqdel and no other actions will be performed on the job. If the job was in the process of creating a compute group or expanding a compute group the creation and expansion will proceed
-# Killed - The Environment was paused before the job could complete and therefore ccq considers the job "dead" since all the resources created for that job will have been deleted
-# Error - ccqLauncher encountered an error while attempting to run the job. These errors should be logged in the Administration -> Errors tab from within the UI and contain both an error message and a traceback
-# Completed - the job has completed "successfully" as far as the scheduler is concerned and the job output files will be transferred back to the user
+# Pending - The job has been submitted via ccqsub and is in the DB but has not yet been processed by ccqHubHandler.py
+# Processing - ccqHubHandler is applying the rules and performing the routing of the job
+# Queued - ccqHubHandler is waiting to send the job to the scheduler
+# Submitted - ccqHubHandler has sent the job to scheduler and it is now up to the scheduler to handle the execution of the job
 
+# Can have multiple states now depending on the scheduler:
+# Pending/Queued/CCQueued/Provisioning/Running/Completed/Error etc. These states will come directly from the remote scheduler
+
+# Completed - the job has finished and the remote scheduler has marked the job as completed. ccqHubHandler will now work to transfer the output files and perform other post processing tasks
+
+# deleting - the job has been deleted via ccqdel and no other actions will be performed on the job. If the job was in the process of creating a compute group or expanding a compute group the creation and expansion will proceed
+
+# Error - ccqHubHandler encountered an error while attempting to run the job. These errors will be logged in a TBD place
+
+
+def performJobRouting():
+    print "Placeholder for actual rules/routing policy evaluation and enforcement."
 
 def createSchedulerObject(schedName, schedType, schedulerInstanceId, schedulerHostName, schedulerIpAddress, clusterName):
     # Create the scheduler object that will be used to call the scheduler specific methods
@@ -281,17 +288,17 @@ def determineNextStepsForJob(jobId, scheduler, clusterName):
         return {"status": "success", "payload": {"nextStep": "waitForExpansionToComplete"}}
 
 
-def determineJobsToProcess(schedName, clusterName):
+def determineJobsToProcess():
     print "Inside of determineJobsToProcess"
     #Check to see which job is next in line to be run
     jobSubmitTimes = {}
     jobs = {}
-    results = ClusterMethods.queryObject(None, "RecType-Job-schedulerUsed-" + str(schedName) + "-schedClusterName-" + str(clusterName), "query", "dict", "beginsWith")
+    results = ClusterMethods.queryObject(None, "RecType-Job-", "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
         print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+        return {'status': 'error', 'payload': results['payload']}
     for job in results:
         print "This is the job[status] " + str(job['status'])
         if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'] != "Deleting" and job['status'] != "deleting" and not job['isSubmitted']:
@@ -645,7 +652,7 @@ def copyJobOutputFilesToSpecifiedLocation(job):
             return {"status": "error", "payload": "There was an error transferring the job output files."}
 
 
-def delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName):
+def delegateTasks():
     print "The timestamp when starting delegateTasks is: " + str(time.time())
     listOfJobsToProcess = {}
     isStartup=True
@@ -654,26 +661,13 @@ def delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName):
             #This prevents spamming the database with queries while the initial instances are creating and allows instances
             #to spin up properly
             if len(listOfJobsToProcess) < 10 and not isStartup:
-                time.sleep(20)
-            results = determineJobsToProcess(schedName, clusterName)
+                time.sleep(60)
+            results = determineJobsToProcess()
             isStartup = False
             if results['status'] != "success":
-                time.sleep(20)
+                time.sleep(60)
                 print "Failed to find any jobs, sleeping for 2 minutes and checking for jobs again."
             else:
-                #We need to determine which resources we currently have available to us at the beginning of the processing run, we will not add any new resources to this list until we have run through all the jobs. This will prevent scheduling multiple jobs on the same resources and will allow instances to spin up without getting "hijacked" by other jobs.
-                print "The timestamp when starting checkInstancesStateInScheduler is: " + str(time.time())
-                returnStuff = scheduler.checkInstancesStateInScheduler()
-                print "The timestamp when end checkInstancesStateInScheduler is: " + str(time.time())
-                print "Successfully called checkInstancesStateInScheduler"
-                print "Return code of: " + str(returnStuff)
-
-                print "ccqHubVars.jobMappings: " + str(ccqHubVars.jobMappings)
-                print "ccqHubVars.availableInstances: " + str(ccqHubVars.availableInstances)
-                print "ccqHubVars.instanceInformation: " + str(ccqHubVars.instanceInformation)
-                print "ccqHubVars.instancesPossiblyBeingTerminated: " + str(ccqHubVars.instancesPossiblyBeingTerminated)
-                print "ccqHubVars.instanceTypesAndGroups: " + str(ccqHubVars.instanceTypesAndGroups)
-
                 listOfJobsToProcess = results['payload']['jobs']
 
                 #Process all of the jobs in the list in the order they were submitted
@@ -683,62 +677,29 @@ def delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName):
                         currentJob = listOfJobsToProcess[job[0]]
                         print "THE CURRENT JOB IS: " + str(currentJob['name'])
 
-                        #Check to see if the OS is RedHat and if so then make sure the job isn't set to use Spot Instances!
-                        (name, ver, id) = platform.linux_distribution()
-                        if str(currentJob['useSpot']) == "yes" and name.replace(" ", "").lower().startswith("redhat"):
-                            values = ccqsubMethods.updateJobInDB({"status": "Error"}, currentJob['name'])
-                            if values['status'] != "success":
-                                #Need to update the job status here and somehow notify the user the job has failed
-                                print {"Error": values['payload']}
-                            ClusterMethods.writeToErrorLog({"messages": ["Spot Instances are not supported on RedHat based Instances!\n"], "traceback": ["Job configuration error."]}, "ccq Job " + str(currentJob['name']))
-
-                        #If the job is not autoscaling on RHEL or not running on RHEL
+                        # Now that we have the job we need to determine what the next step is for the job
+                        values = determineNextStepsForJob(currentJob['name'], scheduler, clusterName)
+                        if values['status'] != "success":
+                            if values['status'] == "error":
+                                ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
+                            elif values['status'] == "deleting":
+                                #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
+                                cleanupDeletedJob(currentJob['name'])
                         else:
-                            if scalingType == "autoscaling":
-                                #If the job is not already in the jobInstanceTypeMapping list add it
-                                try:
-                                    ccqHubVars.jobMappings[currentJob['name']]['instanceType']
-                                    if currentJob['status'] == "Killed":
-                                        ccqHubVars.jobMappings[currentJob['name']]['status'] = currentJob['status']
-                                except:
-                                    with ccqHubVars.ccqVarLock:
-                                        ccqHubVars.jobMappings[currentJob['name']] = {}
-                                        ccqHubVars.jobMappings[currentJob['name']]['numberOfInstancesRequested'] = currentJob['numberOfInstancesRequested']
-                                        ccqHubVars.jobMappings[currentJob['name']]['instanceType'] = currentJob['requestedInstanceType']
-                                        ccqHubVars.jobMappings[currentJob['name']]['cores'] = float(currentJob['numCpusRequested'])
-                                        #Convert memory from MB to GB for comparison with AWS
-                                        memoryRequested = float(currentJob['memoryRequested']) / 1000
-                                        ccqHubVars.jobMappings[currentJob['name']]['memory'] = memoryRequested
-
-                                        networkType = None
-                                        if str(currentJob['networkTypeRequested']).lower() == "default":
-                                            networkType = "low"
+                            if values['payload']['nextStep'] == "submitJob":
+                                with ccqHubVars.ccqVarLock:
+                                    if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
+                                        ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
+                                    else:
+                                        if len(ccqHubVars.jobsInProvisioningState) < 10:
+                                            provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
+                                            provisioningThread.start()
+                                            #jobSubmission(currentJob, scheduler)
+                                            ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
                                         else:
-                                            networkType = str(currentJob['networkTypeRequested']).lower()
+                                            pass
 
-                                        ccqHubVars.jobMappings[currentJob['name']]['networkType'] = str(networkType)
 
-                                        ccqHubVars.jobMappings[currentJob['name']]['useSpot'] = currentJob['useSpot']
-                                        ccqHubVars.jobMappings[currentJob['name']]['userSpecifiedInstanceType'] = currentJob['userSpecifiedInstanceType']
-                                        ccqHubVars.jobMappings[currentJob['name']]['status'] = currentJob['status']
-                                        ccqHubVars.jobMappings[currentJob['name']]['isCreating'] = "none"
-                                        ccqHubVars.jobMappings[currentJob['name']]['isSubmitted'] = False
-                                        if scalingType == "autoscaling":
-                                            ccqHubVars.jobMappings[currentJob['name']]['isAutoscaling'] = True
-                                        else:
-                                            ccqHubVars.jobMappings[currentJob['name']]['isAutoscaling'] = False
-                                        ccqHubVars.jobMappings[currentJob['name']]['jobFullName'] = str(currentJob['jobName']) + str(currentJob['name'])
-                                    writeCcqVarsToFile()
-
-                                #Determine whether the job needs to create new resources or not
-                                values = determineNextStepsForJob(currentJob['name'], scheduler, clusterName)
-                                if values['status'] != "success":
-                                    if values['status'] == "error":
-                                        ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
-                                    elif values['status'] == "deleting":
-                                        #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
-                                        cleanupDeletedJob(currentJob['name'])
-                                else:
                                     if values['payload']['nextStep'] == "submitJob":
                                         with ccqHubVars.ccqVarLock:
                                             if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
@@ -864,72 +825,19 @@ def delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName):
 
 
 def main():
-    # get the instance ID
-    urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
-    schedulerId = urlResponse.read()
-
-    results = ClusterMethods.queryObject(None, schedulerId, "get", "dict")
-    if results['status'] == "success":
-        results = results['payload']
-    else:
-        print "There was an error trying to obtain the scheduler object from the database"
-        sys.exit(0)
-
-    for sched in results:
-        schedName = sched['schedName']
-        schedType = sched['schedType']
-        schedulerInstanceId = sched['instanceID']
-        schedulerHostName = sched['instanceName']
-        schedulerIpAddress = sched['instanceIP']
-        clusterName = sched['clusterName']
-        vpcId = sched['VPC_id']
-        scalingType = sched['scalingType']
-
-        scheduler = createSchedulerObject(schedName, schedType, schedulerInstanceId, schedulerHostName, schedulerIpAddress, clusterName)
-        if scheduler['status'] != "success":
-            print scheduler
-            #ClusterMethods.writeToErrorLog({"messages": [scheduler['payload']['error']], "traceback": [scheduler['payload']['traceback']]}, "ccqLauncher")
-        else:
-            scheduler = scheduler['payload']
-
-        print "Successfully created the scheduler object to be used throughout the ccqExecution."
-
         #Set the global variables that ccq will use throughout its operation
         ccqHubVars.init()
         print "Successfully initialized the global variables for ccq."
 
-        #Check to see if this particular ccq instance has written out its compute groups to the DB or not yet
-        results = ClusterMethods.queryObject(None, "ccqCGs-" + str(schedName) + "-" + str(clusterName), "get", "dict")
-        if results['status'] == "success":
-            results = results['payload']
-        else:
-            print "There was an error trying to obtain the ccqCGs object from the database"
-            sys.exit(0)
-
-        count = 0
-        for item in results:
-            count += 1
-
-        if count == 0:
-            #We haven't written the object out yet, need to do so now
-            obj = {'action': "create"}
-            data = {'name': "ccqCGs-" + str(schedName) + "-" + str(clusterName), 'RecType': 'ccqCGs', "schedName": str(schedName), "computeGroups": []}
-            obj['obj'] = data
-            response = ClusterMethods.handleObj(obj)
-            if response['status'] != "success":
-                print "There was an error trying to save out the ccqCGs object to the DB to maintain state on which ccq compute groups are still running."
-                sys.exit(0)
-
         #Set the locks for the threads to ensure data integrity and to ensure multiple threads do not write to the same ccq variable or ccq status file at once
         ccqHubVars.ccqVarLock = threading.RLock()
         ccqHubVars.ccqFileLock = threading.RLock()
-        ccqHubVars.ccqInstanceLock = threading.RLock()
 
-        ccqCleanupThread = threading.Thread(target=monitorJobs, args=(scheduler, clusterName))
+        ccqCleanupThread = threading.Thread(target=monitorJobs)
         ccqCleanupThread.start()
-        print "Successfully started the monitorJobsAndInstances thread to check and monitor the instances statuses."
+        print "Successfully started the monitorJobsAndInstances thread to check and monitor the jobs."
 
-        ccqDelegateTasksThread = threading.Thread(target=delegateTasks(scheduler, schedName, scalingType, vpcId, clusterName))
+        ccqDelegateTasksThread = threading.Thread(target=delegateTasks)
         ccqDelegateTasksThread.start()
 
         #Run forever and check to make sure the threads are running
