@@ -166,10 +166,10 @@ def main():
         parser.set('General', 'ccqHubPrefix', str(prefix))
 
         # TODO change these to be attributes that are passed in.
-        parser.add_section('Web Sever')
+        parser.add_section('Web Server')
         host = "localhost"
         port = 8080
-        parser.set('Web Sever', 'host', str(host))
+        parser.set('Web Server', 'host', str(host))
         parser.set('Web Server', 'port', port)
 
         parser.write(conigFile)

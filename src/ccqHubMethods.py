@@ -270,7 +270,7 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         return {"status": "success", "payload": {"isTaken": False}}
 
 
-def saveJobScript(jobScriptLocation, jobScriptText, ccOptionsCommandLine, jobName, jobMD5Hash, userName, targetName, identity, keyPrefix):
+def saveJobScript(jobScriptLocation, jobScriptText, ccOptionsCommandLine, jobName, jobMD5Hash, userName, targetName, identity):
     jobInDBAlready = False
     values = checkUniqueness("jobScript", jobName)
     if values['status'] == 'success' and values['payload']['isTaken']:
@@ -289,13 +289,31 @@ def saveJobScript(jobScriptLocation, jobScriptText, ccOptionsCommandLine, jobNam
 
     if not jobInDBAlready:
         #Save the job script object to the DB
-        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsCommandLine, "jobMD5": str(jobMD5Hash), "userName": str(userName), "targetName": str(targetName), "identity": str(identity), "keyPrefix": str(keyPrefix)}
+        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsCommandLine, "jobMD5Hash": str(jobMD5Hash), "userName": str(userName), "targetName": str(targetName), "identity": str(identity)}
         values = putJobScriptInDB(**obj)
         if values['status'] == 'success':
-            print values['payload']
+            return {"status": "success", "payload": "Successfully saved the job script to the database."}
         else:
             return {"status": "error", "payload": values['payload']}
+    else:
+        return {"status": "success", "payload": "This job script already exists in the DB."}
 
+
+def putJobScriptInDB(jobScriptLocation, jobScriptText, jobName, ccOptionsParsed, jobMD5Hash, userName, targetName, identity):
+    obj = {}
+    obj['action'] = "create"
+    data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
+            'jobScriptLocation': str(jobScriptLocation), "dateFirstSubmitted": str(time.time()), "runTimes": {}, "numberOfTimesRun": str("0"), "createdByUser": str(userName), "jobMD5Hash": str(jobMD5Hash), "identity": str(identity), "targetName": str(targetName)}
+    for command in ccOptionsParsed:
+        if ccOptionsParsed[command] != "None":
+            data[command] = ccOptionsParsed[command]
+    obj['obj'] = data
+    response = dbInterface.handleObj(**obj)
+    if response['status'] == "success" or response['status'] == "partial":
+        item = response['payload']
+        return {"status": "success", "payload": "Successfully saved the job script to the database."}
+    else:
+        return {"status": "error", "payload": str(response['message'])}
 
 def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName, isRemoteSubmit, targetName, identity):
     instanceType = ccOptionsParsed["instanceType"]
@@ -339,7 +357,7 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
     obj['obj'] = data
-    response = handleObj(obj)
+    response = dbInterface.handleObj(**obj)
     if response['status'] == "success" or response['status'] == "partial":
         item = response['payload']
         done = False
@@ -348,7 +366,7 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
         timeElapsed = 0
         while not done:
             try:
-                items = queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict", "beginsWith")
+                items = queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict")
                 if items['status'] == "success":
                     items = items['payload']
                 else:
@@ -357,7 +375,12 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
 
                 for jobScript in items:
                     jobScript['numberOfTimesRun'] = int(jobScript['numberOfTimesRun'])+1
-                    jobScript.save()
+                    obj = {'action': "modify", "obj": jobScript}
+                    response = dbInterface.handleObj(**obj)
+                    if response['status'] != "success":
+                        print response['payload']['error']
+                        print response['payload']['traceback']
+                        return {"status": "error", "payload": {str(response['payload']['error'])}}
                 done = True
             except Exception as e:
                 print traceback.format_exc(e)
@@ -696,8 +719,8 @@ def getInput(fieldName, description, possibleValues, exampleValues):
                 inputPrompt += str(exampleValues[x]) + ", "
             else:
                 inputPrompt += "and " + str(exampleValues[x]) + ".\n"
-        temp = raw_input(inputPrompt)
-        return temp
+    temp = raw_input(inputPrompt)
+    return temp
 
 
 #TODO need to finish fleshing this out, this may not be exactly what we are going for here.........I'm not sure we may want each key to be it's own identity object

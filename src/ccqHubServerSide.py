@@ -38,7 +38,7 @@ import ccqHubMethods
 #tempJobScriptLocation = ClusterMethods.tempScriptJobLocation
 #tempJobOutputLocation = ClusterMethods.tempJobOutputLocation
 
-@route('/ccqHubstat', method='POST')
+@route('/ccqHubStat', method='POST')
 def ccqHubstat():
     VARS = request.json
     jobId = VARS["jobId"]
@@ -128,7 +128,7 @@ def ccqHubstat():
             return {"status": "success", "payload": {"message": str(values['payload']), "cert": str(cert)}}
 
 
-@route('/ccqHubdel', method='POST')
+@route('/ccqHubDel', method='POST')
 def ccqHubdel():
     VARS = request.json
     jobId = VARS["jobId"]
@@ -182,7 +182,7 @@ def ccqHubdel():
         print traceback.format_exc(e)
 
 
-@route('/ccqHubsub', method='POST')
+@route('/ccqHubSub', method='POST')
 def ccqHubsub():
     VARS = request.json
     jobScriptLocation = VARS['jobScriptLocation']
@@ -197,7 +197,11 @@ def ccqHubsub():
     certLength = VARS['certLength']
     ccAccessKey = VARS['ccAccessKey']
     targetName = VARS['targetName']
-    targetAddresses = VARS['targetAddresses']
+    remoteUserName = VARS['remoteUserName']
+
+    # Since we are not calculating the instance type here we need to set it to None. It will be updated later on when we get the info from the ccq scheduler.
+    # If the job stays for a local scheduler then this argument is never needed.
+    ccOptionsParsed['instanceType'] = ccOptionsParsed['requestedInstanceType']
 
     values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
     if values['status'] != "success":
@@ -209,16 +213,19 @@ def ccqHubsub():
         password = values['payload']['password']
         cert = values['payload']['cert']
 
+    #TODO figure out how to handle remote username vs regular username currently I think we just want to set the username to the remote userName
+    userName = remoteUserName
+
     #TODO implement pricing calls to the instances
 
     # The unique identification of the user who submitted the job is the combination of the identity object and the username that they provide for the job
     # They are required to provide a username for the job when submitting through ccqHubsub.
-    obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "targetName": str(targetName), "identity": str(identity)}
+    obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "targetName": str(targetName), "identity": str(identity)}
     values = ccqHubMethods.saveJobScript(**obj)
     if values['status'] != "success":
         return {"status": "error", "payload": {"message": values['payload'], "cert": str(None)}}
     else:
-        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(userName), "password": str(password), "isRemoteSubmit": "True", "dateExpires": dateExpires, "valKey": valKey, "certLength": certLength, "ccAccessKey": ccAccessKey, "identity": str(identity), "targetName": str(targetName), "targetAddresses": str(targetAddresses)}
+        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsParsed, "userName": str(userName), "isRemoteSubmit": "True", "identity": str(identity), "targetName": str(targetName)}
         results = ccqHubMethods.saveJob(**obj)
         if results['status'] != "success":
             return {"status": "error", "payload": {"message": values['payload'], "cert": str(None)}}

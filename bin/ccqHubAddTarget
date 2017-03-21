@@ -99,6 +99,9 @@ def main():
                     print "Maximum number of input tries exceeded for target name. Please try again."
                     sys.exit(0)
 
+            if schedType is None:
+                schedType = ccqHubMethods.getInput("scheduler type", "the type of scheduler that is being added", ccqHubMethods.ccqHubSupportedSchedulerTypes, None)
+
             if targetAddress is None:
                 if schedType == "ccq":
                     print "\nccq schedulers require that the target address be the address of the Login Instance and NOT the instance of the scheduler itself."
