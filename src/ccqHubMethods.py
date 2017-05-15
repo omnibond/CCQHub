@@ -821,7 +821,6 @@ def readSubmitHostOutOfConfigFile():
 
 #TODO this may need to be broken out into addUserNameToIdentity and generateAndAddKeyToIdentity.....not sure on that either
 def saveAndGenNewIdentityKey(identityName, keyId, actions):
-    import hashlib
     import binascii
     import uuid
     try:
@@ -843,8 +842,15 @@ def saveAndGenNewIdentityKey(identityName, keyId, actions):
                 attempts += 1
             if attempts >= 5:
                 return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": None}
-
-        dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
+        try:
+            import hashlib
+            dk = hashlib.pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
+        except Exception as e:
+            try:
+                from backports.pbkdf2 import pbkdf2_hmac
+                dk = pbkdf2_hmac('sha256', str(uuid.uuid4()), os.urandom(128), 100000)
+            except Exception as e:
+                return {"status": "error", "payload": {"error": "CCQHub is designed to use Python 2.7.8 or greater, however it can be used with Python 2.6.x-2.7.7 by installing the backports.pbkdf2 package. Please upgrade your Python installation or install the backports.pbkdf2 package and try installing CCQHub again.", "traceback": ''.join(traceback.format_exc(e))}}
         #Add the newly generated key and the key's permissions to the key object
         #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
         identityUuid = str(uuid.uuid4())

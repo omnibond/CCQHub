@@ -37,7 +37,6 @@ def main():
 
     ccqHubAdminKeyPath = args.ccqHubAdminKeyPath
     targetNames = args.targetNames
-    targetAddress = args.targetAddress
     userName = args.userName
 
     try:

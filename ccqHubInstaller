@@ -206,6 +206,7 @@ def main():
         if values['status'] != "success":
             print values['payload']['error']
             print values['payload']['traceback']
+            sys.exit(0)
         else:
             # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory
             generatedKey = values['payload']
@@ -220,6 +221,7 @@ def main():
             if values['status'] != "success":
                 print values['payload']['error']
                 print values['payload']['traceback']
+                sys.exit(0)
             else:
                 # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory
                 generatedKey = values['payload']
@@ -231,6 +233,7 @@ def main():
         #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
         #TODO make this auto-start and make it a little more intelligent
         from subprocess import Popen, STDOUT
+        os.system("mkdir " + str(prefix) + "/logs")
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
         Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=STDOUT, stdout=logfile)
 

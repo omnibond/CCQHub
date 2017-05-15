@@ -663,6 +663,7 @@ def delegateTasks():
             if len(listOfJobsToProcess) < 10 and not isStartup:
                 time.sleep(60)
             results = determineJobsToProcess()
+            sys.exit(0)
             isStartup = False
             if results['status'] != "success":
                 time.sleep(60)
