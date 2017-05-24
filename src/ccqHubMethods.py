@@ -1056,3 +1056,10 @@ def encodeString(k, field):
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
 
+def writeCcqVarsToFile():
+    # TODO need to reformat this to work for ccqHub and not reuse the stuff from ccq
+    with ccqHubVars.ccqVarLock:
+        with ccqHubVars.ccqFileLock:
+            #Don't load or write the ccqVars.subnetsCreating variable to the file as if the process is killed the group will have either created or not and the if the subnet has already been created then it will not be used in the calculations. If the process was killed before the group could be created we can use the subent
+            with open(ccqHubVars.ccqVarFileBackup, "w") as ccqFile:
+                json.dump({"instanceTypesAndGroups": ccqHubVars.instanceTypesAndGroups, "jobMappings": ccqHubVars.jobMappings, "instancesPossiblyBeingTerminated": ccqHubVars.instancesPossiblyBeingTerminated, "instanceInformation": ccqHubVars.instanceInformation, "availableInstances": ccqHubVars.availableInstances}, ccqFile)

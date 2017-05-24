@@ -21,16 +21,16 @@ import urllib2
 
 from Scheduler import Scheduler
 
-import ccqsubMethods
+import ccqHubMethods
 
 import math
 import traceback
 import time
 import logging
 
-logFileDirectory = "/var/logs/CCQHub"
+#logFileDirectory = "/var/logs/CCQHub"
 
-logging.basicConfig(filename=str(logFileDirectory) + 'torque.log', level=logging.DEBUG)
+#logging.basicConfig(filename=str(logFileDirectory) + 'torque.log', level=logging.DEBUG)
 
 
 class TorqueScheduler(Scheduler):
@@ -42,10 +42,11 @@ class TorqueScheduler(Scheduler):
         os.environ["PBS_SERVER"] = str(self.instanceName)
 
     def checkJobs(self, instancesToCheck, canidatesForTermination, toTerminate, instancesRunningOn, instanceRelations, job, isAutoscalingJob):
+        #TODO This will have to change for local submission stuff
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         jobInDBStillRunning = False
         if isAutoscalingJob == "true":
@@ -82,7 +83,7 @@ class TorqueScheduler(Scheduler):
                         state = state.split('/')
                         state = state[1]
                         if state == job['schedulerJobName']:
-                            values = ccqsubMethods.updateJobInDB({"status": "Running"}, job['jobId'])
+                            values = ccqHubMethods.updateJobInDB({"status": "Running"}, job['jobId'])
                             if values['status'] != "success":
                                 print "There was an error trying to save the new job state to the DB!"
                             print "Instance: " + str(instancesRunningOn[instanceNum]) + " is still running the job in the DB named: " + str(job['jobName'])
@@ -95,10 +96,11 @@ class TorqueScheduler(Scheduler):
         return {"status" : "success", "payload": {"jobInDBStillRunning": jobInDBStillRunning, "toTerminate": toTerminate}}
 
     def checkNodeForNodesToPossiblyTerminate(self, instanceNamesToCheck, instanceIdsToCheck):
+        #TODO This will have to change for local submission stuff
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         toPossiblyTerminate = []
         instancesToCheck = ""
@@ -155,26 +157,31 @@ class TorqueScheduler(Scheduler):
 
     def takeComputeNodeOffline(self, computeNodeInstanceId):
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        #TODO This will have to change for local submission stuff
+        #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         os.system('/opt/torque/bin/pbsnodes -o ' + str(computeNodeInstanceId))
         return {"status" : "success", "payload": "Disabled the compute node successfully so no new jobs will be assigned to it!"}
 
     def setComputeNodeOnline(self, computeNodeInstanceId):
+        #TODO This will have to change for local submission stuff
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         os.system('/opt/torque/bin/pbsnodes -c ' + str(computeNodeInstanceId))
         return {"status" : "success", "payload": "Enabled the compute node successfully so new jobs will be assigned to it!"}
 
     def submitJobToScheduler(self, userName, jobName, jobId, hostList, tempJobScriptLocation, hostArray, hostIdArray, isAutoscaling, jobWorkDir):
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        #TODO This will have to change for local submission stuff
+        #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         os.system("sudo /opt/torque/sbin/trqauthd")
 
         if isAutoscaling:
@@ -184,7 +191,7 @@ class TorqueScheduler(Scheduler):
             if status == 0:
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
                 #Need to add the instances that the job is running on to the DB entry
-                values = ccqsubMethods.updateJobInDB({"status": "Submitted", "instancesRunningOnNames": hostArray, "instancesRunningOnIds": hostIdArray, "schedulerJobName": jobName}, jobId)
+                values = ccqHubMethods.updateJobInDB({"status": "Submitted", "instancesRunningOnNames": hostArray, "instancesRunningOnIds": hostIdArray, "schedulerJobName": jobName}, jobId)
                 if values['status'] == "deleting":
                     status, output = commands.getstatusoutput("/opt/torque/bin/qdel " + str(jobName))
                     print output
@@ -195,7 +202,7 @@ class TorqueScheduler(Scheduler):
 
                 return {"status" : "success", "payload": "The job has been successfully submitted to the scheduler!"}
             else:
-                ccqsubMethods.updateJobInDB({"status": "Error"}, jobId)
+                ccqHubMethods.updateJobInDB({"status": "Error"}, jobId)
                 print "There was an error trying to submit the job to the scheduler!\n" + output
                 return {"status": "error", "payload": "There was an error trying to submit the job to the scheduler!\n" + output}
         else:
@@ -205,7 +212,7 @@ class TorqueScheduler(Scheduler):
             if status == 0:
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
                 #Need to add the instances that the job is running on to the DB entry
-                values = ccqsubMethods.updateJobInDB({"status": "Submitted", "schedulerJobName": jobName}, jobId)
+                values = ccqHubMethods.updateJobInDB({"status": "Submitted", "schedulerJobName": jobName}, jobId)
                 if values['status'] == "deleting":
                     status, output = commands.getstatusoutput("/opt/torque/bin/qdel " + str(jobName))
                     print output
@@ -216,7 +223,7 @@ class TorqueScheduler(Scheduler):
 
                 return {"status" : "success", "payload": "The job has been successfully submitted to the scheduler!"}
             else:
-                ccqsubMethods.updateJobInDB({"status": "Error"}, jobId)
+                ccqHubMethods.updateJobInDB({"status": "Error"}, jobId)
                 print "There was an error trying to submit the job to the scheduler!\n" + output
                 return {"status": "error", "payload": "There was an error trying to submit the job to the scheduler!\n" + output}
 
@@ -231,103 +238,108 @@ class TorqueScheduler(Scheduler):
         return {"status": "success", "payload": formattedHostList}
 
     def checkIfInstancesAlreadyAvailableInScheduler(self, requestedInstanceType, numberOfInstancesRequested):
-        urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
-        availabilityZone = urlResponse.read()
-        values = ccqHubMethods.getRegion(availabilityZone, "")
-
-        if values['status'] != 'success':
-            return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
-        else:
-            region = values['payload']
-        values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
-        if values['status'] != 'success':
-           return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS!" + str(values['payload'])}
-        else:
-            instancesInRegion = values['payload']
-
-            try:
-                instanceInfo = instancesInRegion[requestedInstanceType]
-                requestedMemory = float(instanceInfo['Memory'])
-                requestedCores = float(instanceInfo['Cores'])
-            except Exception as e:
-                return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! The requested Instance Type: " + str(requestedInstanceType) + " is not currently supported!"}
-
-        instanceNamesFree = []
-
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
-        os.system("sudo /opt/torque/sbin/trqauthd")
-        status, instanceStates = commands.getstatusoutput('/opt/torque/bin/pbsnodes')
-        splitOutput = instanceStates.split('\n')
-        instanceIdList = {}
-
-        if len(splitOutput)/9 < int(numberOfInstancesRequested):
-            return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
-        else:
-            results = ccqHubMethods.queryObject(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
-            if results['status'] == "success":
-                results = results['payload']
-            else:
-                return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
-            for DDBitem in results:
-                instanceIdList[DDBitem['instanceName']] = DDBitem['instanceID']
-
-        instancesFree = 0
-        instanceName = ""
-        instanceNumberOn = 0
-        newInstanceNamesAndIds = {}
-
-        status, instanceStates = commands.getstatusoutput('/opt/torque/bin/pbsnodes')
-        splitOutput = instanceStates.split('\n')
-
-        cores = 0
-        memory = 0
-        while instanceNumberOn < len(splitOutput)/9:
-            #Get state of the instance (free or job exclusive or down or offline)
-            stateLine = splitOutput[(instanceNumberOn*9)+1]
-            if "state = " not in str(splitOutput[(instanceNumberOn*9)+1]):
-                stateLine = splitOutput[(instanceNumberOn*9)+2]
-                stateLine = stateLine.replace(" ", "")
-            stateSplit = stateLine.split("=")
-            stateOfInstance = stateSplit[1].strip()
-
-            #Get number of CPUs and amount of Memory of the instance
-            instanceInfoLine = splitOutput[(instanceNumberOn*9)+5]
-            instanceInfoLineSplit = instanceInfoLine.split(",")
-            if "jobs = " in str(instanceInfoLineSplit[0]):
-                instanceInfoLine = splitOutput[(instanceNumberOn*9)+6]
-                instanceInfoLineSplit = instanceInfoLine.split(",")
-            for thing in range(len(instanceInfoLineSplit)):
-                if "ncpus=" in instanceInfoLineSplit[thing]:
-                    coresLine = instanceInfoLineSplit[thing]
-                    coresSplit = coresLine.split("=")
-                    cores = float(coresSplit[1])
-
-            for thing in range(len(instanceInfoLineSplit)):
-                if "physmem=" in instanceInfoLineSplit[thing]:
-                    memoryLine = instanceInfoLineSplit[thing]
-                    memorySplit = memoryLine.split("=")
-                    memory = memorySplit[1]
-                    memory = memory[:len(memory)-2]
-                    memory = float(memory)/1000000
-
-            if str(stateOfInstance) == "free" and float(cores) >= float(requestedCores) and float(memory) >= float(math.ceil(requestedMemory)):
-                instancesFree += 1
-                if int(len(instanceNamesFree)) != int(numberOfInstancesRequested):
-                    instanceNamesFree.append(splitOutput[(instanceNumberOn*9)])
-                    newInstanceNamesAndIds[instanceIdList[splitOutput[(instanceNumberOn*9)]]] = splitOutput[(instanceNumberOn*9)]
-            instanceNumberOn += 1
-
-        if int(len(instanceNamesFree)) != int(numberOfInstancesRequested):
-            return {"status": "success", "payload": {"instancesFound": False, "newInstanceNamesAndIds": None}}
-        else:
-            return {"status": "success", "payload": {"instancesFound": True, "newInstanceNamesAndIds": newInstanceNamesAndIds}}
+        print "TODO Implement a different thing here"
+        # urlResponse = urllib2.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone')
+        # availabilityZone = urlResponse.read()
+        # values = ccqHubMethods.getRegion(availabilityZone, "")
+        #
+        # if values['status'] != 'success':
+        #     return {"status": "error", "payload": "There was an error trying to determine which region the Scheduler you are using is in. Please try again! " + str(values['payload'])}
+        # else:
+        #     region = values['payload']
+        # values = ccqHubMethods.getAllInformationAboutInstancesInRegion(region)
+        # if values['status'] != 'success':
+        #    return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS!" + str(values['payload'])}
+        # else:
+        #     instancesInRegion = values['payload']
+        #
+        #     try:
+        #         instanceInfo = instancesInRegion[requestedInstanceType]
+        #         requestedMemory = float(instanceInfo['Memory'])
+        #         requestedCores = float(instanceInfo['Cores'])
+        #     except Exception as e:
+        #         return {"status": "error", "payload": "There was a problem getting the Instance Type information from AWS! The requested Instance Type: " + str(requestedInstanceType) + " is not currently supported!"}
+        #
+        # instanceNamesFree = []
+        #
+        # #TODO This will have to change for local submission stuff
+        # #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+        # # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.system("sudo /opt/torque/sbin/trqauthd")
+        # status, instanceStates = commands.getstatusoutput('/opt/torque/bin/pbsnodes')
+        # splitOutput = instanceStates.split('\n')
+        # instanceIdList = {}
+        #
+        # if len(splitOutput)/9 < int(numberOfInstancesRequested):
+        #     return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
+        # else:
+        #     results = ccqHubMethods.queryObj(None, "RecType-HPCNode-clusterName-" + str(self.clusterName) + "-name-", "query", "dict", "beginsWith")
+        #     if results['status'] == "success":
+        #         results = results['payload']
+        #     else:
+        #         return {"status": "success", "payload": {"instancesFound": False, "instances": None}}
+        #     for DDBitem in results:
+        #         instanceIdList[DDBitem['instanceName']] = DDBitem['instanceID']
+        #
+        # instancesFree = 0
+        # instanceName = ""
+        # instanceNumberOn = 0
+        # newInstanceNamesAndIds = {}
+        #
+        # status, instanceStates = commands.getstatusoutput('/opt/torque/bin/pbsnodes')
+        # splitOutput = instanceStates.split('\n')
+        #
+        # cores = 0
+        # memory = 0
+        # while instanceNumberOn < len(splitOutput)/9:
+        #     #Get state of the instance (free or job exclusive or down or offline)
+        #     stateLine = splitOutput[(instanceNumberOn*9)+1]
+        #     if "state = " not in str(splitOutput[(instanceNumberOn*9)+1]):
+        #         stateLine = splitOutput[(instanceNumberOn*9)+2]
+        #         stateLine = stateLine.replace(" ", "")
+        #     stateSplit = stateLine.split("=")
+        #     stateOfInstance = stateSplit[1].strip()
+        #
+        #     #Get number of CPUs and amount of Memory of the instance
+        #     instanceInfoLine = splitOutput[(instanceNumberOn*9)+5]
+        #     instanceInfoLineSplit = instanceInfoLine.split(",")
+        #     if "jobs = " in str(instanceInfoLineSplit[0]):
+        #         instanceInfoLine = splitOutput[(instanceNumberOn*9)+6]
+        #         instanceInfoLineSplit = instanceInfoLine.split(",")
+        #     for thing in range(len(instanceInfoLineSplit)):
+        #         if "ncpus=" in instanceInfoLineSplit[thing]:
+        #             coresLine = instanceInfoLineSplit[thing]
+        #             coresSplit = coresLine.split("=")
+        #             cores = float(coresSplit[1])
+        #
+        #     for thing in range(len(instanceInfoLineSplit)):
+        #         if "physmem=" in instanceInfoLineSplit[thing]:
+        #             memoryLine = instanceInfoLineSplit[thing]
+        #             memorySplit = memoryLine.split("=")
+        #             memory = memorySplit[1]
+        #             memory = memory[:len(memory)-2]
+        #             memory = float(memory)/1000000
+        #
+        #     if str(stateOfInstance) == "free" and float(cores) >= float(requestedCores) and float(memory) >= float(math.ceil(requestedMemory)):
+        #         instancesFree += 1
+        #         if int(len(instanceNamesFree)) != int(numberOfInstancesRequested):
+        #             instanceNamesFree.append(splitOutput[(instanceNumberOn*9)])
+        #             newInstanceNamesAndIds[instanceIdList[splitOutput[(instanceNumberOn*9)]]] = splitOutput[(instanceNumberOn*9)]
+        #     instanceNumberOn += 1
+        #
+        # if int(len(instanceNamesFree)) != int(numberOfInstancesRequested):
+        #     return {"status": "success", "payload": {"instancesFound": False, "newInstanceNamesAndIds": None}}
+        # else:
+        #     return {"status": "success", "payload": {"instancesFound": True, "newInstanceNamesAndIds": newInstanceNamesAndIds}}
 
     def getJobStatusFromScheduler(self, jobId, jobNameInScheduler, userName):
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        #TODO This will have to change for local submission stuff
+        #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
         os.system("sudo /opt/torque/sbin/trqauthd")
         if jobId == "all":
             status, output = commands.getstatusoutput('/opt/torque/bin/qstat -u ' + str(userName))
@@ -341,16 +353,20 @@ class TorqueScheduler(Scheduler):
 
     def deleteJobFromScheduler(self, jobForceDelete, jobNameInScheduler):
         if jobForceDelete:
-            os.environ["USER"] = ccqHubMethods.ccqUserName
-            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+            #TODO This will have to change for local submission stuff
+            #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+            # os.environ["USER"] = ccqHubMethods.ccqUserName
+            # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             os.system("sudo /opt/torque/sbin/trqauthd")
             status, output = commands.getstatusoutput("/opt/torque/bin/qdel -p " + str(jobNameInScheduler))
             print output
         else:
-            os.environ["USER"] = ccqHubMethods.ccqUserName
-            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+            #TODO This will have to change for local submission stuff
+            #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+            # os.environ["USER"] = ccqHubMethods.ccqUserName
+            # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+            # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
             os.system("sudo /opt/torque/sbin/trqauthd")
             status, output = commands.getstatusoutput("/opt/torque/bin/qdel " + str(jobNameInScheduler))
             print output

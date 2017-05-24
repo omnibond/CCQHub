@@ -16,19 +16,15 @@ import os
 import sys
 import time
 
-import ClusterMethods
-from ccqsubMethods import writeCcqVarsToFile
+from ccqHubMethods import writeCcqVarsToFile
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
 from Slurm import SlurmScheduler
 from Torque import TorqueScheduler
-from Condor import CondorScheduler
-from Openlava import OpenlavaScheduler
 
 import urllib2
 import json
 import traceback
-import ccqsubMethods
 import commands
 from datetime import datetime
 from datetime import timedelta
@@ -38,10 +34,11 @@ import threading
 import ccqHubVars
 import pytz
 import paramiko
+import credentials
 
-tempJobScriptLocation = ClusterMethods.tempScriptJobLocation
-tempJobOutputLocation = ClusterMethods.tempJobOutputLocation
-logDirectory = ClusterMethods.logFileDirectory
+tempJobScriptLocation = ""#ClusterMethods.tempScriptJobLocation
+tempJobOutputLocation = ""#ClusterMethods.tempJobOutputLocation
+logDirectory = ""#ClusterMethods.logFileDirectory
 
 #####################################
 #  Possible CCQHub States and meanings #
@@ -72,10 +69,6 @@ def createSchedulerObject(schedName, schedType, schedulerInstanceId, schedulerHo
             scheduler = TorqueScheduler(**kwargs)
         elif schedType == "Slurm":
             scheduler = SlurmScheduler(**kwargs)
-        elif schedType == "Condor":
-            scheduler = CondorScheduler(**kwargs)
-        elif schedType == "Openlava":
-            scheduler = OpenlavaScheduler(**kwargs)
         else:
             return {"status": "error", "payload": "Unable to create the scheduler object, unsupported scheduler type " + str(schedType)}
         return {"status": "success", "payload": scheduler}
@@ -91,6 +84,11 @@ def jobSubmission(jobObj, ccAccessKey):
     userName = jobObj["userName"]
     jobMD5Hash = jobObj['jobMD5Hash']
     password = ""
+    submitHost = ""
+    jobScriptLocation = ""
+    ccOptionsParsed = ""
+    certLength = ""
+    dateExpires = ""
 
     numCpusRequested = jobObj["numCpusRequested"]
     memoryRequested = jobObj["memoryRequested"]
@@ -104,6 +102,8 @@ def jobSubmission(jobObj, ccAccessKey):
     encodedPassword = ccqHubMethods.encodeString("ccqpwdfrval", str(password))
     encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(userName))
     valKey = "unpw"
+    isCert = ""
+    attempts =0
 
     url = "https://" + str(submitHost) + "/srv/ccqsub"
     final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey" : str(ccAccessKey)}
@@ -127,6 +127,8 @@ def jobSubmission(jobObj, ccAccessKey):
         elif res['status'] == "error":
             #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
             print res['payload']['message'] + "\n\n"
+    except Exception as e:
+        print traceback.format_exc(e)
     return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
 
 
@@ -222,17 +224,17 @@ def determineNextStepsForJob(jobId, scheduler, clusterName):
                             print "THERE WAS A PROBLEM DELETING THE INSTANCE FROM THE COMPUTE GROUP IT WAS WAITING ON TO EXPAND: " + str(traceback.format_exc(e))
                             pass
                     ccqHubVars.jobMappings[jobId]['status'] = "CCQueued"
-                    values = ccqsubMethods.updateJobInDB({"instancesRunningOnNames": tempInstanceNames, "instancesRunningOnIds": tempInstanceIds, "status": "CCQueued"}, jobId)
+                    values = ccqHubMethods.updateJobInDB({"instancesRunningOnNames": tempInstanceNames, "instancesRunningOnIds": tempInstanceIds, "status": "CCQueued"}, jobId)
                     #Check and make sure the job is not set to be deleted if it is, return error and do nothing. If it is not  set for deletion, carry on to submit the job
                     if values['status'] == "deleting":
                         with ccqHubVars.ccqVarLock:
                             ccqHubVars.jobMappings[jobId]['status'] = "deleting"
-                        ClusterMethods.writeToErrorLog({"messages": ["The job was deleted before the job could be submitted successfully\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
+                        #ClusterMethods.writeToErrorLog({"messages": ["The job was deleted before the job could be submitted successfully\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
                         writeCcqVarsToFile()
                         return {"status": "deleting", "payload": "The job was deleted before the job could be submitted successfully\n"}
                     elif values['status'] != 'success':
                         # Need to update the job status here and somehow notify the user the job has failed
-                        ClusterMethods.writeToErrorLog({"messages": ["Unable to update the job " + str(jobId) + " in the DB\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
+                        #ClusterMethods.writeToErrorLog({"messages": ["Unable to update the job " + str(jobId) + " in the DB\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
                         writeCcqVarsToFile()
                         return {"status": "error", "payload": "Unable to update the job " + str(jobId) + " in the DB when setting the job to submit"}
                     else:
@@ -251,18 +253,18 @@ def determineNextStepsForJob(jobId, scheduler, clusterName):
                 for instance in ccqHubVars.jobMappings[jobId]['instancesToUse']:
                     tempInstanceIds.append(ccqHubVars.instanceInformation[instance]['instanceID'])
                 ccqHubVars.jobMappings[jobId]['status'] = "CCQueued"
-                values = ccqsubMethods.updateJobInDB({"instancesRunningOnNames": ccqHubVars.jobMappings[jobId]['instancesToUse'], "instancesRunningOnIds": tempInstanceIds, "status": "CCQueued"}, jobId)
+                values = ccqHubMethods.updateJobInDB({"instancesRunningOnNames": ccqHubVars.jobMappings[jobId]['instancesToUse'], "instancesRunningOnIds": tempInstanceIds, "status": "CCQueued"}, jobId)
                 # Check and make sure the job is not set to be deleted if it is, return error and do nothing. If it is not  set for deletion, carry on to submit the job
                 if values['status'] == "deleting":
                     print "THERE WAS A PROBLEM SETTING THINGS UP status is DELETING: " + str(values)
                     with ccqHubVars.ccqVarLock:
                         ccqHubVars.jobMappings[jobId]['status'] = "deleting"
                     writeCcqVarsToFile()
-                    ClusterMethods.writeToErrorLog({"messages": ["The job was deleted before the job could expand the compute group to the required size\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
+                    #ClusterMethods.writeToErrorLog({"messages": ["The job was deleted before the job could expand the compute group to the required size\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
                     return {"status": "deleting", "payload": "The job was deleted before the job could expand the compute group to the required size\n"}
                 elif values['status'] != 'success' and values['status'] != "deleting":
                     print "THERE WAS A PROBLEM SETTING THINGS UP status is ERROR: " + str(values)
-                    ClusterMethods.writeToErrorLog({"messages": ["Unable to update the job " + str(jobId) + " in the DB\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
+                    #ClusterMethods.writeToErrorLog({"messages": ["Unable to update the job " + str(jobId) + " in the DB\n"], "traceback": [''.join(traceback.format_stack())]}, "ccq Job " + str(jobId))
                     writeCcqVarsToFile()
                     return {"status": "error", "payload": "Unable to update the job " + str(jobId) + " in the DB"}
                 else:
@@ -293,7 +295,7 @@ def determineJobsToProcess():
     #Check to see which job is next in line to be run
     jobSubmitTimes = {}
     jobs = {}
-    results = ClusterMethods.queryObject(None, "RecType-Job-", "query", "dict", "beginsWith")
+    results = ccqHubMethods.queryObj(None, "RecType-Job-name-", "query", "dict", "beginsWith")
     if results['status'] == "success":
         results = results['payload']
     else:
@@ -301,7 +303,7 @@ def determineJobsToProcess():
         return {'status': 'error', 'payload': results['payload']}
     for job in results:
         print "This is the job[status] " + str(job['status'])
-        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'] != "Deleting" and job['status'] != "deleting" and not job['isSubmitted']:
+        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'] != "Deleting" and job['status'] != "deleting" and str(job['isSubmitted']).lower() == "false":
             jobSubmitTimes[job['name']] = job['dateSubmitted']
             jobs[job['name']] = job
 
@@ -339,7 +341,7 @@ def monitorJobs(scheduler):
             print "NOW CHECKING JOB: " + str(job) + " at the start of monitor jobs\n"
 
             #Check to see if the job is still in the DB if it is not then the user deleted the job through the ccqdel command, we need to delete it from the jobMappings object
-            temp = ClusterMethods.queryObject(None, job, "get", "dict")
+            temp = ccqHubMethods.queryObj(None, job, "get", "dict")
             if temp['status'] == "success":
                 temp = temp['payload']
             else:
@@ -451,7 +453,7 @@ def monitorJobs(scheduler):
                         if int(totalMinutes) > 1440:
                             print "THE TOTAL NUMBER OF MINUTES IS GREATER THAN ONE DAY SO WE ARE DELETING THE JOB FROM THE DB\n"
                             obj = {'action': 'delete', 'obj': job}
-                            response = ClusterMethods.handleObj(obj)
+                            response = ccqHubMethods.handleObj(obj)
                             if response['status'] != 'success':
                                 print "There was an error trying to remove the old Jobs from the DB!"
                             else:
@@ -477,7 +479,7 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
             endTime = time.time()
 
             #Need to update the DB entry for the job to completed and set the timestamp of when the job completed.
-            values = ccqsubMethods.updateJobInDB({"status": "Completed", "endTime": str(endTime), "instancesRunningOnIds": [], "instancesRunningOnNames": []}, job['name'])
+            values = ccqHubMethods.updateJobInDB({"status": "Completed", "endTime": str(endTime), "instancesRunningOnIds": [], "instancesRunningOnNames": []}, job['name'])
             if values['status'] != "success":
                 print values['payload']
             print "Job " + str(job['name'] + " has finished running!")
@@ -493,7 +495,7 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
                 ccqHubVars.jobMappings[job['name']]['instancesToUse'] = []
             writeCcqVarsToFile()
 
-            results = ClusterMethods.queryObject(None, job['name'], "get", "dict")
+            results = ccqHubMethods.queryObj(None, job['name'], "get", "dict")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -524,10 +526,10 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
                     #     print "THE OUTPUT OF THE GROUPS ADDED STATE IS: " + str(ua)
                     if tries > maxTries:
                         transferred = True
-                        ClusterMethods.writeToErrorLog({"messages": ["There was a problem transferring the output files from the job to the requested location. Please check the " + str(ClusterMethods.tempJobOutputLocation) + str(jobDB['userName']) + " on " + str(scheduler.schedName) + " to see if your output files have been transferred there\n"], "traceback": ["Job Output Transfer Error"]}, "ccq Job " + str(jobDB['name']))
+                        #ClusterMethods.writeToErrorLog({"messages": ["There was a problem transferring the output files from the job to the requested location. Please check the " + str(ClusterMethods.tempJobOutputLocation) + str(jobDB['userName']) + " on " + str(scheduler.schedName) + " to see if your output files have been transferred there\n"], "traceback": ["Job Output Transfer Error"]}, "ccq Job " + str(jobDB['name']))
                     tries += 1
 
-            values = ccqsubMethods.calculateAvgRunTimeAndUpdateDB(jobDB['startTime'], str(endTime), jobDB['instanceType'], jobDB['jobName'])
+            values = ccqHubMethods.calculateAvgRunTimeAndUpdateDB(jobDB['startTime'], str(endTime), jobDB['instanceType'], jobDB['jobName'])
             if values['status'] != "success":
                 print values['payload']
                 print "There was an error calculating the run time for the job!"
@@ -541,11 +543,11 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
 def copyJobOutputFilesToSpecifiedLocation(job):
     storedPassword = ""
     accessInstanceName = ""
-    res = ClusterMethods.queryObject(None, "RecType-Collaborator-userName-" + str(job['userName']), "query", "json")
+    res = ccqHubMethods.queryObj(None, "RecType-Collaborator-userName-" + str(job['userName']), "query", "json")
     if res['status'] == "success":
         results = res['payload']
         for item in results:
-            res = encryptionFunctions.decryptString(item['password'])
+            res = credentials.decryptString(item['password'])
             if res['status'] == "success":
                 storedPassword = res['payload']['string']
             else:
@@ -585,7 +587,7 @@ def copyJobOutputFilesToSpecifiedLocation(job):
     #home directory on the login instance for easy access and storage"
     if job['isRemoteSubmit'] == "True":
         #Get Access Instance IP Address:
-        results = ClusterMethods.queryObject(None, "RecType-WebDav-clusterName-" + str(job['schedClusterName']), "query", "dict", "beginsWith")
+        results = ccqHubMethods.queryObj(None, "RecType-WebDav-clusterName-" + str(job['schedClusterName']), "query", "dict", "beginsWith")
         if results['status'] == "success":
             results = results['payload']
         else:
@@ -596,7 +598,7 @@ def copyJobOutputFilesToSpecifiedLocation(job):
             accessInstanceName = item["accessName"]
 
         if accessInstanceName != "":
-            ccqsubMethods.updateJobInDB({"accessInstanceResultsStoredOn": str(accessInstanceName)}, job['name'])
+            ccqHubMethods.updateJobInDB({"accessInstanceResultsStoredOn": str(accessInstanceName)}, job['name'])
             try:
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -617,7 +619,7 @@ def copyJobOutputFilesToSpecifiedLocation(job):
     else:
         #Use the submitHostInstanceId parameter to get the IP of the instance to send the information too!
         ipToSendTo = ""
-        items = ClusterMethods.queryObject(None, str(job['submitHostInstanceId']), "get", "dict")
+        items = ccqHubMethods.queryObj(None, str(job['submitHostInstanceId']), "get", "dict")
         if items['status'] == "success":
             items = items['payload']
 
@@ -661,7 +663,7 @@ def delegateTasks():
             #This prevents spamming the database with queries while the initial instances are creating and allows instances
             #to spin up properly
             if len(listOfJobsToProcess) < 10 and not isStartup:
-                time.sleep(60)
+                time.sleep(20)
             results = determineJobsToProcess()
             sys.exit(0)
             isStartup = False
@@ -682,7 +684,8 @@ def delegateTasks():
                         values = determineNextStepsForJob(currentJob['name'], scheduler, clusterName)
                         if values['status'] != "success":
                             if values['status'] == "error":
-                                ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
+                                #ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
+                                print values['payload']
                             elif values['status'] == "deleting":
                                 #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
                                 cleanupDeletedJob(currentJob['name'])
@@ -699,7 +702,6 @@ def delegateTasks():
                                             ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
                                         else:
                                             pass
-
 
                                     if values['payload']['nextStep'] == "submitJob":
                                         with ccqHubVars.ccqVarLock:
@@ -770,14 +772,14 @@ def delegateTasks():
                                         writeCcqVarsToFile()
 
                                         #Add the compute group being created to the list of CGs in the DB
-                                        results = ClusterMethods.queryObject(None, "ccqCGs-" + str(scheduler.schedName) + "-" + str(clusterName), "get", "dict")
+                                        results = ccqHubMethods.queryObj(None, "ccqCGs-" + str(scheduler.schedName) + "-" + str(clusterName), "get", "dict")
                                         if results['status'] == "success":
                                             results = results['payload']
                                         else:
                                             values = ccqsubMethods.updateJobInDB({"status": "Error"}, currentJob['name'])
                                             with ccqHubVars.ccqVarLock:
                                                 ccqHubVars.jobMappings[currentJob['name']]['status'] = "Error"
-                                            ClusterMethods.writeToErrorLog({"messages": [values['payload']['error']], "traceback": [values['payload']['traceback']]}, "ccq Job " + str(currentJob['name']))
+                                            #ClusterMethods.writeToErrorLog({"messages": [values['payload']['error']], "traceback": [values['payload']['traceback']]}, "ccq Job " + str(currentJob['name']))
                                         writeCcqVarsToFile()
                                         #Put the compute group on the ccqCGs object
                                         for item in results:
@@ -785,7 +787,7 @@ def delegateTasks():
                                             computeGroups.append(groupName)
                                             item['computeGroups'] = computeGroups
                                             obj = {'action': 'modify', 'obj': item}
-                                            response = ClusterMethods.handleObj(obj)
+                                            response = ccqHubMethods.handleObj(obj)
 
                                         newCGThread = threading.Thread(target=launchNewComputeGroupForJob, args=(currentJob, vpcId, scheduler, clusterName))
                                         newCGThread.start()
@@ -833,10 +835,11 @@ def main():
         #Set the locks for the threads to ensure data integrity and to ensure multiple threads do not write to the same ccq variable or ccq status file at once
         ccqHubVars.ccqVarLock = threading.RLock()
         ccqHubVars.ccqFileLock = threading.RLock()
+        ccqHubVars.ccqHubDBLock = threading.RLock()
 
-        ccqCleanupThread = threading.Thread(target=monitorJobs)
-        ccqCleanupThread.start()
-        print "Successfully started the monitorJobsAndInstances thread to check and monitor the jobs."
+        #ccqCleanupThread = threading.Thread(target=monitorJobs)
+        #ccqCleanupThread.start()
+        #print "Successfully started the monitorJobsAndInstances thread to check and monitor the jobs."
 
         ccqDelegateTasksThread = threading.Thread(target=delegateTasks)
         ccqDelegateTasksThread.start()
@@ -849,9 +852,9 @@ def main():
                 ccqDelegateTasksThread.start()
             else:
                 print "The ccqDelegateTasksThread is running."
-            if not ccqCleanupThread.is_alive:
-                print "UHOH WE DIED AT SOME POINT"
-                ccqCleanupThread.start()
-            else:
-                print "The ccqCleanupThread is running."
+            # if not ccqCleanupThread.is_alive:
+            #     print "UHOH WE DIED AT SOME POINT"
+            #     ccqCleanupThread.start()
+            # else:
+            #     print "The ccqCleanupThread is running."
 main()

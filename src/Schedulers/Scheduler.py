@@ -22,9 +22,9 @@ import ccqHubMethods
 import time
 import traceback
 
-clusterInformationLogFileLocation = ccqHubMethods.clusterInformationLogFileLocation
-logFileDirectory = ClusterMethods.logFileDirectory
-scriptDirectory = ClusterMethods.scriptDirectory
+clusterInformationLogFileLocation = ""#ccqHubMethods.clusterInformationLogFileLocation
+logFileDirectory = ""#ClusterMethods.logFileDirectory
+scriptDirectory = ""#ClusterMethods.scriptDirectory
 
 sleepTime = 30  # how long to sleep between checks for number of nodes registered in seconds
 timeOut = 600  # max time to wait in seconds per node

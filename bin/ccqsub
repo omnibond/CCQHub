@@ -25,6 +25,7 @@ import hashlib
 import getpass
 from datetime import date, datetime
 import commands
+import getpass
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
@@ -39,7 +40,7 @@ def ccqsub():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud
     parser = argparse.ArgumentParser(description="A wrapper for common schedulers such as Torque, SGE, Condor, and SLURM. Gives the schedulers autoscaling capability within the Amazon Cloud. When a user submits a job using this script, the job script will be parsed, the number of instances needed determined, and the instances will be launched for the job at run-time. Commands that are specified in the job script take precedence over the options specified on the command line. These commands can be denoted inside of the jobscript itself by using the #CC directive. The commands that are available through the #CC directive are -it (instance type), -nt (network type), -ni (number of instances requested), -op (optimization type), -p (criteria priority), -cpu (number of CPUs requested), -mem (amount of memory in MB requested), -s (scheduler to use), -st (scheduler type), -jn (job name), -vt (volume type), -us (use spot), -sp (spot price). ccqsub will also try to create a generic submit script for the scheduler you are using if you do not specify a job script. The output files from the job will appear in the CloudyCluster user's home directory on the instance the job was submitted from by default if you are using a CloudyCluster instance to submit your files. However there may be a minute or two delay from when the job finishes to when the files appear on the machine the job was submitted from due to extra processing needed. If you submit from a host outside of CloudyCluster the output files will be stored in the CloudyCluster user's home directory on the Access Instance associated with the Cluster that the job was submitted to. This behavior can be changed by specifying the -o and -e PBS directives in your job scripts or using the -o and -e ccqsub command line arguments, these tell the scheduler to output the files to the directories specified inside of the job script instead of the defaults. If an output file is missing check the /opt/CloudyCluster/ccqsub/undeliveredJobOutput/<CloudyCluster_user_name> directory on the Scheduler the job was submitted on as this is the default directory for undeliverable job output files.")
 
-    parser.add_argument('-V', action='version', version='ccqsub (version 0.3)')
+    parser.add_argument('-V', action='version', version='ccqsub (version 0.1)')
 
     # For use with app and ssh keys
     parser.add_argument('-i', '-i', help="The path to the file containing the app/ssh key for use when validating the user on the requested resources.", default=None)
@@ -122,7 +123,9 @@ def ccqsub():
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
     if remoteUserName is None:
-        remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+        # We can either prompt the user for the remote username or just use their current username, for now we will opt to just use their current username
+        remoteUserName = getpass.getuser()
+        #remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
 
     if jobScriptLocation is not None:
         status, output = commands.getstatusoutput("pwd")

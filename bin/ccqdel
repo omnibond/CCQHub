@@ -24,6 +24,7 @@ import getpass
 import os
 import base64
 from datetime import datetime
+import getpass
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
@@ -62,6 +63,10 @@ def ccqdel():
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
+    if remoteUserName is None:
+        # We can either prompt the user for the remote username or just use their current username, for now we will opt to just use their current username
+        remoteUserName = getpass.getuser()
+        #remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
 
     valKey = "unpw"
     #userName = ""

@@ -26,15 +26,14 @@ from Scheduler import Scheduler
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import ccqHubMethods
-import ccqsubMethods
 import traceback
 import time
 import commands
 
-clusterInformationLogFileLocation = ccqHubMethods.clusterInformationLogFileLocation
-logFileDirectory = ccqHubMethods.logFileDirectory
-scriptDirectory = ccqHubMethods.scriptDirectory
-cloudyClusterDefaultSSHUser = ccqHubMethods.cloudyClusterDefaultSSHUser
+clusterInformationLogFileLocation = ""#ccqHubMethods.clusterInformationLogFileLocation
+logFileDirectory = ""#ccqHubMethods.logFileDirectory
+scriptDirectory = ""#ccqHubMethods.scriptDirectory
+cloudyClusterDefaultSSHUser = ""#ccqHubMethods.cloudyClusterDefaultSSHUser
 
 class SlurmScheduler(Scheduler):
 
@@ -42,10 +41,11 @@ class SlurmScheduler(Scheduler):
         super(SlurmScheduler, self).__init__(**kwargs)
 
     def checkJobs(self, instancesToCheck, canidatesForTermination, toTerminate, instancesRunningOn, instanceRelations, job, isAutoscalingJob):
+        #TODO This will have to change for local submission stuff
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         jobInDBStillRunning = False
         status = ""
@@ -130,7 +130,7 @@ class SlurmScheduler(Scheduler):
 
             for slurmJob in listOfJobsAndAttrs:
                 if slurmJob['JobState'] == "RUNNING" and job['schedulerJobName'] == slurmJob['JobName']:
-                    values = ccqsubMethods.updateJobInDB({"status": "Running", "batchHost": slurmJob['BatchHost']}, job['jobId'])
+                    values = ccqHubMethods.updateJobInDB({"status": "Running", "batchHost": slurmJob['BatchHost']}, job['jobId'])
                     if values['status'] != "success":
                         print "There was an error trying to save the new job state to the DB!"
                     jobInDBStillRunning = True
@@ -138,10 +138,11 @@ class SlurmScheduler(Scheduler):
         return {"status" : "success", "payload": {"jobInDBStillRunning": jobInDBStillRunning, "toTerminate": toTerminate}}
 
     def checkNodeForNodesToPossiblyTerminate(self, instanceNamesToCheck, instanceIdsToCheck):
+        #TODO This will have to change for local submission stuff
         #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        os.environ["USER"] = ccqHubMethods.ccqUserName
-        os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
         toPossiblyTerminate = []
         instancesToCheck = ""
@@ -193,9 +194,11 @@ class SlurmScheduler(Scheduler):
 
     def submitJobToScheduler(self, userName, jobName, jobId, hostList, tempJobScriptLocation, hostArray, hostIdArray, isAutoscaling, jobWorkDir):
         if isAutoscaling:
-            os.environ["USER"] = ccqHubMethods.ccqUserName
-            os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-            os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
+            #TODO This will have to change for local submission stuff
+        #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
+        # os.environ["USER"] = ccqHubMethods.ccqUserName
+        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
+        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
 
             print "sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId)
             status, output = commands.getstatusoutput("sudo /opt/slurm/bin/sbatch --uid " + str(userName) + " -D " + str(jobWorkDir) + " -w " + str(hostList) + " -o " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".o -e " + str(ccqHubMethods.tempJobOutputLocation) + str(userName) + "/" + str(jobName) + str(jobId) + ".e " + str(tempJobScriptLocation) + "/" + str(jobName) + str(jobId))
@@ -245,7 +248,7 @@ class SlurmScheduler(Scheduler):
 
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
                 #Need to add the instances that the job is running on to the DB entry
-                values = ccqsubMethods.updateJobInDB({"status": "Submitted", "instancesRunningOnNames": hostArray, "instancesRunningOnIds": hostIdArray, "schedulerJobName": jobName, "batchHost": str(batchHost)}, jobId)
+                values = ccqHubMethods.updateJobInDB({"status": "Submitted", "instancesRunningOnNames": hostArray, "instancesRunningOnIds": hostIdArray, "schedulerJobName": jobName, "batchHost": str(batchHost)}, jobId)
                 if values['status'] == "deleting":
                     status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scancel " + str(jobName))
                     print output
@@ -254,7 +257,7 @@ class SlurmScheduler(Scheduler):
                     print "There was an error trying to save the instances that the job needs to run on in the DB!\n" + values['payload']
                     return {"status": "error", "payload": "There was an error trying to update the job status in the DB!\n" + values['payload']}
             else:
-                ccqsubMethods.updateJobInDB({"status": "Error"}, jobId)
+                ccqHubMethods.updateJobInDB({"status": "Error"}, jobId)
                 print "There was an error trying to submit the job to the scheduler!\n" + output
                 return {"status": "error", "payload": "There was an error trying to submit the job to the scheduler!\n" + output}
 
@@ -293,7 +296,7 @@ class SlurmScheduler(Scheduler):
 
                 #save out job name to the Job DB entry for use by the InstanceInUseChecks
                 #Need to add the instances that the job is running on to the DB entry
-                values = ccqsubMethods.updateJobInDB({"status": "Submitted", "schedulerJobName": jobName, "batchHost": batchHost}, jobId)
+                values = ccqHubMethods.updateJobInDB({"status": "Submitted", "schedulerJobName": jobName, "batchHost": batchHost}, jobId)
                 if values['status'] == "deleting":
                     status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scancel " + str(jobName))
                     print output
@@ -302,7 +305,7 @@ class SlurmScheduler(Scheduler):
                     print "There was an error trying to save the instances that the job needs to run on in the DB!\n" + values['payload']
                     return {"status": "error", "payload": "There was an error trying to update the job status in the DB!\n" + values['payload']}
             else:
-                ccqsubMethods.updateJobInDB({"status": "Error"}, jobId)
+                ccqHubMethods.updateJobInDB({"status": "Error"}, jobId)
                 print "There was an error trying to submit the job to the scheduler!\n" + output
                 return {"status": "error", "payload": "There was an error trying to submit the job to the scheduler!\n" + output}
 
