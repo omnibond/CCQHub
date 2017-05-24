@@ -112,3 +112,27 @@ def initInstaller(prefix):
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
             ccqHubPrefix = None
+
+
+#This function takes in a section name and a key name and then returns the value of that key that is in the config file.
+def retrieveSpecificConfigFileKey(section, key):
+    parser = ConfigParser.ConfigParser()
+    requestedKeyValue = None
+    if os.path.isfile(os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"):
+        ccqHubConfigFileLocation = os.path.dirname(os.path.realpath(__file__)) + "/../etc/ccqHub.conf"
+        try:
+            parser.read(ccqHubConfigFileLocation)
+            try:
+                requestedKeyValue = parser.get(str(section), str(key))
+                return {"status": "success", "payload": requestedKeyValue}
+            except Exception as e:
+                #print "ERROR" + str(e)
+                return {"status": "error", "payload": "There was an error encountered trying to obtain the key from the config file.\n" + ''.join(traceback.format_exc(e))}
+
+        except Exception as e:
+            #print traceback.format_exc(e)
+            #print "Unable to successfully read ccqHub configuration file, the file may have been corrupted."
+            return {"status": "error", "payload": "Unable to read ccqHub configuration file, the file does not exist.\n" + ''.join(traceback.format_exc(e))}
+    else:
+        #print "Unable to read ccqHub configuration file, the file does not exist."
+        return {"status": "error", "payload": "Unable to read ccqHub configuration file, the file does not exist."}

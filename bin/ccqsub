@@ -30,6 +30,7 @@ import getpass
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
 import credentials
+import ccqHubVars
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
@@ -123,9 +124,19 @@ def ccqsub():
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
     if remoteUserName is None:
-        # We can either prompt the user for the remote username or just use their current username, for now we will opt to just use their current username
-        remoteUserName = getpass.getuser()
-        #remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+        values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
+        if values['status'] != "success":
+            print values['payload']
+            sys.exit(0)
+        else:
+            promptRemoteUserName = values['payload']
+            if str(promptRemoteUserName).lower() == "no":
+                remoteUserName = getpass.getuser()
+            elif str(promptRemoteUserName).lower() == "yes":
+                remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+            else:
+                print "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."
+                sys.exit(0)
 
     if jobScriptLocation is not None:
         status, output = commands.getstatusoutput("pwd")
