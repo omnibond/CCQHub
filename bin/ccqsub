@@ -47,7 +47,6 @@ def ccqsub():
     # Remote system username, for use when utilizing an app key to authenticate
     parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want the job to run as on the remote system.", default=None)
 
-
     # If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
     # Job script file location
     parser.add_argument('-js', metavar='<job_script_location>', help="The path to the job script file that you want to submit to the scheduler.", default=None, required=True)
@@ -175,13 +174,14 @@ def ccqsub():
                     if len(splitLine) > 1:
                         for command in possibleCommands:
                             if splitLine[1] == "-l":
-                                possibleArgs = {"mem": "memoryRequested", "nodes": "numberOfInstancesRequested", "ppn": "numCpusRequested"}
+                                possibleArgs = {"mem": "memoryRequested", "nodes": "numberOfInstancesRequested", "ppn": "numCpusRequested", "select": "numberOfInstancesRequested"}
                                 subCommands = splitLine[2].split(":")
                                 for subCommand in subCommands:
                                     parsedCommand = subCommand.split("=")
                                     try:
-                                        ccOptionsParsed[possibleArgs[parsedCommand[0]]] = parsedCommand[1].replace("\n", "")
-                                    except KeyError as e:
+                                        if parsedCommand[0] != "walltime":
+                                            ccOptionsParsed[possibleArgs[parsedCommand[0]]] = parsedCommand[1].replace("\n", "")
+                                    except (IndexError, KeyError) as e:
                                         #The argument passed to the -l command in PBS is not required by ccqsub
                                         pass
 
@@ -226,6 +226,10 @@ def ccqsub():
             ccOptionsParsed['userSpecifiedInstanceType'] = "true"
         else:
             ccOptionsParsed['userSpecifiedInstanceType'] = "false"
+
+        # See if the user specified a spot price and didn't specify the -us flag if they didn't specify the flag then set it for them
+        if str(ccOptionsParsed["spotPrice"]).lower() != "none":
+            ccOptionsParsed['useSpot'] = "yes"
 
         #Make sure all the spot options are valid
         validateSpotInstanceParameters(ccOptionsParsed)
@@ -274,7 +278,7 @@ def ccqsub():
     if not validUser:
         while attempts < 5 and not validUser:
             if not isCert and ccAccessKey is None:
-                print "This version of ccq only supports key based submissions. Please provide the ccq access key via the -i commandline option and try again."
+                print "This version of ccqHub only supports key based submissions. Please provide the ccqHub access key via the -i commandline option and try again."
                 sys.exit(0)
                 # userName = raw_input("Please enter your username: \n")
                 # password = getpass.getpass("Please enter your password: \n")
@@ -404,7 +408,7 @@ def validateInstanceParameters(ccOptionsParsed):
     if ccOptionsParsed["criteriaPriority"] != "mcn" and ccOptionsParsed["criteriaPriority"] != "mnc" and ccOptionsParsed["criteriaPriority"] != "cmn" and ccOptionsParsed["criteriaPriority"] != "cnm" and ccOptionsParsed["criteriaPriority"] != "ncm" and ccOptionsParsed["criteriaPriority"] != "nmc":
         print "Invalid criteria priority specified. The valid criteria priority are: mcn, mnc, cmn, cnm, ncm, or nmc.\n"
         sys.exit(0)
-    if ccOptionsParsed["networkTypeRequested"] != "low" and ccOptionsParsed["networkTypeRequested"] != "moderate" and ccOptionsParsed["networkTypeRequested"] != "high" and ccOptionsParsed["networkTypeRequested"] != "10 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "default" and ccOptionsParsed["networkTypeRequested"] != "20 Gigabit":
+    if ccOptionsParsed["networkTypeRequested"] != "low" and ccOptionsParsed["networkTypeRequested"] != "moderate" and ccOptionsParsed["networkTypeRequested"] != "high" and ccOptionsParsed["networkTypeRequested"] != "10 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "default" and ccOptionsParsed["networkTypeRequested"] != "20 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "up to 10 gigabit":
         print "Invalid network type specified. The valid network types are: low, moderate, high, 10 Gigabit, or 20 Gigabit.\n"
         sys.exit(0)
 

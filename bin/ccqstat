@@ -26,6 +26,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
+import credentials
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
@@ -60,7 +61,7 @@ def ccqstat():
     certLength = args.cl
     printErrors = args.pe
     appKeyLocation = args.i
-    userName = args.ru
+    remoteUserName = args.ru
 
     jobInformation = {}
 
@@ -71,20 +72,40 @@ def ccqstat():
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
+    valKey = "unpw"
+    #userName = ""
+    password = ""
+    attempts = 0
+    validUser = False
+    isCert = False
+    dateExpires = ""
+    encodedUserName = ""
+    encodedPassword = ""
+
     # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key, if so open the file and read in the key.
     ccAccessKey = ""
-    try:
-        ccAccessKey = open(str(appKeyLocation), "r")
-        for line in ccAccessKey:
-            ccAccessKey += line
-    except Exception as e:
-       ccAccessKey = None
+
+    if appKeyLocation is None:
+        values = credentials.validateCcqHubAdminKey(ccqHubMethods.ccqHubAdminJobSubmitKeyFile)
+        if values['status'] != "success":
+            print values['payload']['error']
+            print values['payload']['traceback']
+            sys.exit(0)
+        else:
+            ccAccessKey = values['payload']
+    else:
+        try:
+            ccAccessKey = open(str(appKeyLocation), "r")
+            for line in ccAccessKey:
+                ccAccessKey += line
+        except Exception as e:
+           ccAccessKey = None
 
     #TODO only need the username if the job id is all (I think). If they are requesting information about a specific job then we have the username on the job object.
     # User must give a username when running ccqstat
-    if userName is None and jobId == "all":
-        userName = ccqHubMethods.getInput("remote username", "username that you want to view the jobs for on the remote system", None, None)
+    if remoteUserName is None and jobId == "all":
+        remoteUserName = ccqHubMethods.getInput("remote username", "username that you want to view the jobs for on the remote system", None, None)
 
     valKey = "unpw"
     #userName = ""
@@ -99,11 +120,13 @@ def ccqstat():
     if not validUser:
         while attempts < 5 and not validUser:
             if not isCert and ccAccessKey is None:
-                userName = raw_input("Please enter your username: \n")
-                password = getpass.getpass("Please enter your password: \n")
-                encodedPassword = encodeString("ccqpwdfrval", str(password))
-                encodedUserName = encodeString("ccqunfrval", str(userName))
-                valKey = "unpw"
+                print "This version of ccqHub only supports key based submissions. Please provide the ccqHub access key via the -i commandline option and try again."
+                sys.exit(0)
+                # userName = raw_input("Please enter your username: \n")
+                # password = getpass.getpass("Please enter your password: \n")
+                # encodedPassword = encodeString("ccqpwdfrval", str(password))
+                # encodedUserName = encodeString("ccqunfrval", str(userName))
+                # valKey = "unpw"
 
             # Need to get the target information here that we can pass to the backend.
             targetAddresses = []
@@ -118,7 +141,7 @@ def ccqstat():
                         targetAddresses = str(target['targetAddress']).split(",")
 
             url = "http://" + str(submitHost) + "/ccqHubStat"
-            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses)}
+            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses), "remoteUserName": str(remoteUserName)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)

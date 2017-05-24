@@ -60,6 +60,9 @@ def ccqHubstat():
     ccAccessKey = VARS['ccAccessKey']
     targetAddresses = VARS['targetAddresses']
     targetName = VARS['targetName']
+    remoteUserName = VARS['remoteUserName']
+
+    userName = remoteUserName
 
     values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
     if values['status'] != "success":
@@ -139,6 +142,9 @@ def ccqHubdel():
     dateExpires = VARS['dateExpires']
     certLength = VARS['certLength']
     ccAccessKey = VARS['ccAccessKey']
+    remoteUserName = VARS['remoteUserName']
+
+    userName = remoteUserName
 
     values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
     if values['status'] != "success":

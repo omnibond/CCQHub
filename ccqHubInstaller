@@ -232,10 +232,9 @@ def main():
 
         #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
         #TODO make this auto-start and make it a little more intelligent
-        from subprocess import Popen, STDOUT
-        os.system("mkdir " + str(prefix) + "/logs")
+        from subprocess import Popen
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
-        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=STDOUT, stdout=logfile)
+        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile)
 
 main()
 

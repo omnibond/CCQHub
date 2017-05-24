@@ -27,6 +27,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
+import credentials
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
@@ -44,12 +45,15 @@ def ccqdel():
 
     #For use with app and ssh keys
     parser.add_argument('-i', '-i', help="The path to the file containing the app/ssh key for use when validating the user on the requested resources.", default=None)
+    # Remote system username, for use when utilizing an app key to authenticate
+    parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want to view the jobs for on the remote system.", default=None)
     args = parser.parse_args()
 
     jobId = args.j
     jobForceDelete = args.f
     certLength = args.cl
     appKeyLocation = args.i
+    remoteUserName = args.ru
 
     values = ccqHubMethods.readSubmitHostOutOfConfigFile()
     if values['status'] != "success":
@@ -60,7 +64,7 @@ def ccqdel():
 
 
     valKey = "unpw"
-    userName = ""
+    #userName = ""
     password = ""
     attempts = 0
     validUser = False
@@ -72,24 +76,36 @@ def ccqdel():
     # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key, if so open the file and read in the key.
     ccAccessKey = ""
-    try:
-        ccAccessKey = open(str(appKeyLocation), "r")
-        for line in ccAccessKey:
-            ccAccessKey += line
-    except Exception as e:
-       ccAccessKey = None
+
+    if appKeyLocation is None:
+        values = credentials.validateCcqHubAdminKey(ccqHubMethods.ccqHubAdminJobSubmitKeyFile)
+        if values['status'] != "success":
+            print values['payload']['error']
+            print values['payload']['traceback']
+            sys.exit(0)
+        else:
+            ccAccessKey = values['payload']
+    else:
+        try:
+            ccAccessKey = open(str(appKeyLocation), "r")
+            for line in ccAccessKey:
+                ccAccessKey += line
+        except Exception as e:
+           ccAccessKey = None
 
     if not validUser:
         while attempts < 5 and not validUser:
             if not isCert and ccAccessKey is None:
-                userName = raw_input("Please enter your username: \n")
-                password = getpass.getpass("Please enter your password: \n")
-                encodedPassword = encodeString("ccqpwdfrval", str(password))
-                encodedUserName = encodeString("ccqunfrval", str(userName))
-                valKey = "unpw"
+                print "This version of ccqHub only supports key based submissions. Please provide the ccqHub access key via the -i commandline option and try again."
+                sys.exit(0)
+                # userName = raw_input("Please enter your username: \n")
+                # password = getpass.getpass("Please enter your password: \n")
+                # encodedPassword = encodeString("ccqpwdfrval", str(password))
+                # encodedUserName = encodeString("ccqunfrval", str(userName))
+                # valKey = "unpw"
 
             url = "http://" + str(submitHost) + "/ccqHubDel"
-            final = {"jobId": str(jobId), "userName": str(encodedUserName), "instanceId": None, "jobNameInScheduler": None, "password": str(encodedPassword), "jobForceDelete": jobForceDelete, 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey)}
+            final = {"jobId": str(jobId), "userName": str(encodedUserName), "instanceId": None, "jobNameInScheduler": None, "password": str(encodedPassword), "jobForceDelete": jobForceDelete, 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey), "remoteUserName": str(remoteUserName)}
             data = json.dumps(final)
             headers = {'Content-Type': "application/json"}
             req = urllib2.Request(url, data, headers)
