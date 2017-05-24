@@ -232,7 +232,7 @@ def ccqHubsub():
     if values['status'] != "success":
         return {"status": "error", "payload": {"message": values['payload'], "cert": str(None)}}
     else:
-        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsParsed, "userName": str(userName), "isRemoteSubmit": "True", "identity": str(identity), "targetName": str(targetName), "isSubmitted": False}
+        obj = {"jobScriptLocation": str(jobScriptLocation), "jobScriptText": str(jobScriptText), "jobName": str(jobName), "ccOptionsParsed": ccOptionsParsed, "userName": str(userName), "isRemoteSubmit": "True", "identity": str(identity), "targetName": str(targetName)}
         results = ccqHubMethods.saveJob(**obj)
         if results['status'] != "success":
             return {"status": "error", "payload": {"message": values['payload'], "cert": str(None)}}

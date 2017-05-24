@@ -20,7 +20,6 @@ import json
 import traceback
 import ConfigParser
 
-
 global ccqHubConfigFileLocation
 
 global ccqHubLookupDBName
@@ -29,18 +28,27 @@ global ccqHubObjectDBName
 
 global ccqHubDBLock
 
+global ccqHubFileLock
+
+global ccqHubVarLock
+
 global databaseType
 
 global ccqHubPrefix
 
+global jobMappings
+# {"<job_id>": {<job_info>}}
 
 def init():
     global ccqHubConfigFileLocation
     global ccqHubDBLock
+    global ccqHubFileLock
+    global ccqHubVarLock
     global ccqHubLookupDBName
     global ccqHubObjectDBName
     global databaseType
     global ccqHubPrefix
+    global jobMappings
 
     parser = ConfigParser.ConfigParser()
 
@@ -55,6 +63,19 @@ def init():
                 ccqHubObjectDBName = parser.get("Database", "objectTableName")
                 ccqHubPrefix = parser.get("General", "ccqHubPrefix")
                 ccqHubDBLock = None
+                ccqHubFileLock = None
+                ccqHubVarLock = None
+                ccqHubVarFileBackup = str(ccqHubPrefix) + "/var/ccqHubVarsBackup.json"
+                if os.path.isfile(ccqHubVarFileBackup):
+                    try:
+                        with open(ccqHubVarFileBackup, "r") as ccqFile:
+                            backedUpObjects = json.load(ccqFile)
+                            jobMappings = backedUpObjects['jobMappings']
+                    except Exception as e:
+                        print "There was no backup file found, it was either deleted or this is the first time ccqHub has been run."
+                        jobMappings = {}
+                else:
+                    jobMappings = {}
             except Exception as e:
                 print "ERROR" + str(e)
                 # There was an issue getting the database information out of the DB
@@ -63,6 +84,9 @@ def init():
                 databaseType = None
                 ccqHubPrefix = None
                 ccqHubDBLock = None
+                ccqHubFileLock = None
+                ccqHubVarLock = None
+                jobMappings = None
 
         except Exception as e:
             print traceback.format_exc(e)
@@ -71,17 +95,25 @@ def init():
             ccqHubObjectDBName = None
             ccqHubPrefix = None
             ccqHubDBLock = None
+            ccqHubFileLock = None
+            ccqHubVarLock = None
             databaseType = None
+            jobMappings = None
     else:
         ccqHubLookupDBName = None
         ccqHubObjectDBName = None
         ccqHubPrefix = None
         ccqHubDBLock = None
+        ccqHubFileLock = None
+        ccqHubVarLock = None
         databaseType = None
+        jobMappings = None
 
 def initInstaller(prefix):
     global ccqHubConfigFileLocation
     global ccqHubDBLock
+    global ccqHubFileLock
+    global ccqHubVarLock
     global ccqHubLookupDBName
     global ccqHubObjectDBName
     global databaseType

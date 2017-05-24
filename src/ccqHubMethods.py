@@ -60,7 +60,7 @@ encryptAlgNum = "a"
 # List of supported scheduler types. This is required in order to create a default target for each scheduler type.
 ccqHubSupportedSchedulerTypes = ["torque", "slurm", "ccq"]
 
-ccqHubSupportedProtocolTypes = ["http"]#,"local", "ssh"]
+ccqHubSupportedProtocolTypes = ["http", "local"]#, "ssh"]
 
 ccqHubSupportedAuthenticationTypes = ["appkey"]#, "ssh", "username"]
 
@@ -353,7 +353,7 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
         stderrFileLocation = ccOptionsParsed["stderrFileLocation"]
 
     obj = {'action': "create"}
-    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "targetName": str(targetName), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText), 'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "stderrFileLocation": str(stderrFileLocation), "stdoutFileLocation": str(stdoutFileLocation), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir), "status": "Pending", "identity": str(identity), "schedulerUsed": "TBD"}
+    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "targetName": str(targetName), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText), 'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "stderrFileLocation": str(stderrFileLocation), "stdoutFileLocation": str(stdoutFileLocation), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir), "status": "Pending", "identity": str(identity), "schedulerUsed": "TBD", "isSubmitted": False}
     for command in ccOptionsParsed:
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]
@@ -815,6 +815,37 @@ def readSubmitHostOutOfConfigFile():
     else:
         return {"status": "error", "payload": "Unable to read the host from the configuration file."}
 
+def writeCcqVarsToFile():
+    with ccqHubVars.ccqVarLock:
+        with ccqHubVars.ccqFileLock:
+            with open(ccqHubVars.ccqVarFileBackup, "w") as ccqFile:
+                json.dump({"jobMappings": ccqHubVars.jobMappings}, ccqFile)
+
+def getTargetInformation(targetName, schedulerType):
+    if str(targetName) == "default":
+        response = queryObj(None, "DefaultTargets", "get", "json")
+        if response['status'] == "success":
+            results = response['payload']
+            for item in results:
+                print item
+                if item == "meta_var":
+                    for key in results[item]:
+                        print key
+                        if str(key) == str(schedulerType):
+                            targetName = results[item][key]
+    items = queryObj(None, "RecType-Target-name-" + str(targetName) + "-", "query", "dict")
+    if items['status'] == "success":
+        items = items['payload']
+    else:
+        print items['payload']
+        return {'status': 'error', 'payload': items['payload']}
+
+    for target in items:
+        return {"status": "success", "payload": target}
+
+    # Didn't get any items out of the DB :(
+    return {"status": "error", "payload": "The query returned nothing so we can't get the target information."}
+
 ########################################################################################################################
 #                                     Methods that deal with encryption and app Keys                                   #
 ########################################################################################################################
@@ -1055,11 +1086,3 @@ def encodeString(k, field):
         enchars.append(enc)
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
-
-def writeCcqVarsToFile():
-    # TODO need to reformat this to work for ccqHub and not reuse the stuff from ccq
-    with ccqHubVars.ccqVarLock:
-        with ccqHubVars.ccqFileLock:
-            #Don't load or write the ccqVars.subnetsCreating variable to the file as if the process is killed the group will have either created or not and the if the subnet has already been created then it will not be used in the calculations. If the process was killed before the group could be created we can use the subent
-            with open(ccqHubVars.ccqVarFileBackup, "w") as ccqFile:
-                json.dump({"instanceTypesAndGroups": ccqHubVars.instanceTypesAndGroups, "jobMappings": ccqHubVars.jobMappings, "instancesPossiblyBeingTerminated": ccqHubVars.instancesPossiblyBeingTerminated, "instanceInformation": ccqHubVars.instanceInformation, "availableInstances": ccqHubVars.availableInstances}, ccqFile)

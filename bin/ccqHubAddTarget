@@ -105,7 +105,7 @@ def main():
             if targetAddress is None:
                 if schedType == "ccq":
                     print "\nccq schedulers require that the target address be the address of the Login Instance and NOT the instance of the scheduler itself."
-                targetAddress = ccqHubMethods.getInput("target address", "the publicly routable DNS name/IP address where the target can be reached", None, ["example.johndoe.com", "176.32.0.1", "10.2.5.6, example.janedoe.com"])
+                    targetAddress = ccqHubMethods.getInput("target address", "the publicly routable DNS name/IP address where the target can be reached", None, ["example.johndoe.com", "176.32.0.1", "10.2.5.6, example.janedoe.com"])
 
             if protocol is None:
                 protocol = ccqHubMethods.getInput("protocol", "the protocol that is used for submitting jobs at the target", ccqHubMethods.ccqHubSupportedProtocolTypes, None)
@@ -120,7 +120,7 @@ def main():
                     if schedType != "ccq":
                         # Currently only ccq schedulers require a proxy key attribute if the type isn't ccq then skip it for now
                         pass
-                    if auth == "appkey":
+                    elif auth == "appkey":
                         proxyKey = ccqHubMethods.getInput("proxy key", "app key created by CloudyCluster for use with a particular ccq scheduler. This argument should only be used when configuring a ccq scheduler.  This can also be a single proxy key or a comma separated list of proxy keys.", None, ["87hjkdfa783jkadhfjh389adf783jkmyapikey", "89hkjklnklhakdghfad389myappkey"])
                         done = True
                     # elif auth == "ssh":
