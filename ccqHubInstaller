@@ -40,8 +40,12 @@ def main():
     parser.add_argument('-dt', '--databaseType', help="Specifies the database backend to be used by ccqHub. The default is sqlite3.", default="sqlite3", choices=["sqlite3"])
     parser.add_argument('-ap', '--addToPath', help="Specifies that ccqHub should add the path to the ccqHub binaries to the PATH so that they can be called from the commandline directly. If running as root, a script is added to /etc/profile.d to add to the PATH for all users, if running in non-root mode the modification is added to the user's ~/.bashrc. The default is to add the binaries to the PATH, this may require the user to logout and log back in for the changes to take effect.", default="yes", choices=["yes", "no"])
     #parser.add_argument('-sutm', '--singleUserTrustedMode', action='store_true', help="Specifies whether or not ccqHub is going to be running in Single User Trusted Mode. If this argument is specified, the installer will create an Identity to use for submitting jobs. This Identity will be a key file located in the {{prefix}}/.keys directory and will be able to submit jobs to any target added to ccqHub.")
-
     parser.add_argument('-pr', '--promptForRemoteUserName', help="Specifies if ccqHub should prompt for the remote user name or use the current username as the remote username when running ccqHub commands. If the local username is the same as on the remote system this option should be set to \"no\". If the local user name will not be the same as the username the job should run as on the remote system this option should be set to \"yes\". The default option is to prompt the user for the remote username. The remote username can also be passed in via the -ru argument regardless of which option is chosen. The -ru commandline argument value overrides this option and its value will be used as the remote username.", default="yes", choices=["yes", "no"])
+    parser.add_argument('-td', '--targetDefaultType', help="Specifies the default Target type for submitted jobs. The options are \"cloud\" and \"local\". Choosing \"cloud\" means that ccqHub will default to sending jobs to cloud based resources (such as ccq) instead of submitting to any local schedulers. Choosing \"local\" means that ccqHub will default to submitting jobs to local resources instead of submitting to cloud resources. This selection only refers to jobs that are submitted to a default Target.", default="cloud", choices=["cloud", "local"])
+
+    # Commandline arguments for the web server configuration
+    parser.add_argument('-wp', "--webServerPort", help="The port that the ccqHub web service will run on. The default is port 8080.", default="8080")
+    parser.add_argument('-hn', "--hostname", help="The host that the ccqHub web service will run on. The default is localhost.", default="localhost")
 
     args = parser.parse_args()
 
@@ -50,7 +54,12 @@ def main():
     databaseType = args.databaseType
     addToPath = args.addToPath
     promptForRemoteUserName = args.promptForRemoteUserName
+    defaultTargetType = args.targetDefaultType
     #singleUserTrustedMode = args.singleUserTrustedMode
+
+    # Web Server configuration arguments
+    port = args.webServerPort
+    host = args.hostname
 
     if not nonRoot:
         values = credentials.checkAdminRights()
@@ -168,11 +177,10 @@ def main():
         parser.add_section('General')
         parser.set('General', 'ccqHubPrefix', str(prefix))
         parser.set('General', 'promptRemoteUserName', str(promptForRemoteUserName))
+        parser.set('General', 'defaultTargetType', str(defaultTargetType))
 
         # TODO change these to be attributes that are passed in.
         parser.add_section('Web Server')
-        host = "localhost"
-        port = 8080
         parser.set('Web Server', 'host', str(host))
         parser.set('Web Server', 'port', port)
 

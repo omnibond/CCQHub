@@ -62,7 +62,7 @@ ccqHubSupportedSchedulerTypes = ["torque", "slurm", "ccq"]
 
 ccqHubSupportedProtocolTypes = ["http", "local"]#, "ssh"]
 
-ccqHubSupportedAuthenticationTypes = ["appkey"]#, "ssh", "username"]
+ccqHubSupportedAuthenticationTypes = ["appkey", "username"]#, "ssh"]
 
 
 ########################################################################################################################
@@ -747,15 +747,18 @@ def createIdentity(identityName, actions):
 
 def createDefaultTargetsObject():
     obj = {'action': "create", 'obj': {"RecType": "DefaultTargets", "name": "DefaultTargets"}}
+    defaultSchedulers = {}
     for schedType in ccqHubSupportedSchedulerTypes:
-        obj['obj'][schedType] = "None"
+        defaultSchedulers[schedType] = "None"
+
+    obj['obj']['defaultSchedulers'] = defaultSchedulers
 
     # Save out the DefaultTarget object to the DB.
     res = dbInterface.handleObj(**obj)
     if res['status'] != "success":
         return {"status": "error", "payload": res['payload']}
     else:
-        return {"status": "success", "message": "Successfully created the deafultTarget object.", "payload": None}
+        return {"status": "success", "message": "Successfully created the defaultTarget object.", "payload": None}
 
 
 def formatCcqstatOutput(jobs):
@@ -815,25 +818,99 @@ def readSubmitHostOutOfConfigFile():
     else:
         return {"status": "error", "payload": "Unable to read the host from the configuration file."}
 
+
 def writeCcqVarsToFile():
     with ccqHubVars.ccqVarLock:
         with ccqHubVars.ccqFileLock:
             with open(ccqHubVars.ccqVarFileBackup, "w") as ccqFile:
                 json.dump({"jobMappings": ccqHubVars.jobMappings}, ccqFile)
 
+
 def getTargetInformation(targetName, schedulerType):
+    schedulerType = schedulerType.lower()
     if str(targetName) == "default":
+        defaultSchedulers = None
         response = queryObj(None, "DefaultTargets", "get", "json")
         if response['status'] == "success":
             results = response['payload']
             for item in results:
-                print item
-                if item == "meta_var":
-                    for key in results[item]:
-                        print key
-                        if str(key) == str(schedulerType):
-                            targetName = results[item][key]
-    items = queryObj(None, "RecType-Target-name-" + str(targetName) + "-", "query", "dict")
+                defaultSchedulers = json.loads(item['defaultSchedulers'])
+
+            # Check to see which valid targets we have default values for.
+            configuredDefaultTargets = []
+            for scheduler in defaultSchedulers:
+                if str(defaultSchedulers[scheduler]) != "None":
+                    configuredDefaultTargets.append(scheduler)
+
+            if len(configuredDefaultTargets) == 1:
+                # We only have one valid default target check to make sure it is of the correct type and if so use it.
+                if "ccq" in configuredDefaultTargets:
+                    # We have a cloud target. Now we must check the associated schedulers/types the cloud provides to see if there is one for our type.
+                    values = checkCloudSchedulerTypes(defaultSchedulers['ccq'], schedulerType)
+                    if values['status'] != "success":
+                        return {"status": "error", "payload": "Unable to determine if the ccq target has the required schedulers/scheduler types to run the submitted job."}
+                    else:
+                        meetsRequirements = values['payload']['hasRequiredScheduler']
+
+                        if meetsRequirements:
+                            # We found that the cloud target has the required schedulers available.
+                            targetName = defaultSchedulers["ccq"]
+                        else:
+                            # We did not find any default targets for the job that was submitted.
+                            return {"status": "error", "payload": "There are no default cloud or local targets configured that meet the requirements of the job submitted. Unable to find a target to submit the job to. Please check the configured targets and submit your job again."}
+
+                elif str(schedulerType) in configuredDefaultTargets:
+                    # We have a valid default local target for the scheduler type requested use that one.
+                    targetName = defaultSchedulers[schedulerType]
+                else:
+                    # We did not find any default targets for the job that was submitted.
+                    return {"status": "error", "payload": "There are no default local or cloud targets configured that meet the requirements of the job submitted. Unable to find a target to submit the job to. Please check the configured targets and submit your job again."}
+            else:
+                validDefaultTargets = []
+                # We have multiple default targets and need to figure out which to use
+                if "ccq" in configuredDefaultTargets:
+                    # We now need to check and see if the cloud resource provides the proper schedulers/type for the job
+                    values = checkCloudSchedulerTypes(defaultSchedulers['ccq'], schedulerType)
+                    if values['status'] != "success":
+                        return {"status": "error", "payload": "Unable to determine if the ccq target has the required schedulers/scheduler types to run the submitted job."}
+                    else:
+                        meetsRequirements = values['payload']['hasRequiredScheduler']
+                        if meetsRequirements:
+                            # The cloud target found does not meet the job requirements so remove it from the validDefaultTargets list
+                            if "ccq" not in validDefaultTargets:
+                                validDefaultTargets.append("ccq")
+
+                # See if there is a local scheduler that meets the job requirements
+                if str(schedulerType) in configuredDefaultTargets:
+                    if str(schedulerType) not in validDefaultTargets:
+                        validDefaultTargets.append(str(schedulerType))
+
+                if len(validDefaultTargets) == 0:
+                    # We did not find any default targets for the job that was submitted.
+                    return {"status": "error", "payload": "There are no default targets configured that meet the requirements for the job submitted. Unable to find a default target to submit the job to. Please check the configured default targets and submit your job again or specify a target to submit to via the commandline or a job hint."}
+                else:
+                    # Need to check to see if we set the default to submit to cloud or local
+                    values = ccqHubVars.retrieveSpecificConfigFileKey("General", "defaultTargetType")
+                    if values['status'] != "success":
+                        return {'status': 'error', 'payload': values['payload']}
+                    else:
+                        foundTarget = False
+                        defaultTargetType = values['payload']
+                        if str(defaultTargetType).lower() == "cloud":
+                            if "ccq" in validDefaultTargets:
+                                targetName = defaultSchedulers['ccq']
+                                foundTarget = True
+                        elif str(defaultTargetType).lower() == "local":
+                            if str(schedulerType) in validDefaultTargets:
+                                targetName = defaultSchedulers[str(schedulerType)]
+                                foundTarget = True
+
+                        # The user's preferred option does not meet the requirements for the job, send it to the default target that meets the requirements
+                        if not foundTarget:
+                            targetName = defaultSchedulers[validDefaultTargets[0]]
+
+    # Once we have the requested Target name, we attempt to get its information from the DB
+    items = queryObj(None, "RecType-Target-targetName-" + str(targetName) + "-", "query", "dict", "beginsWith")
     if items['status'] == "success":
         items = items['payload']
     else:
@@ -845,6 +922,35 @@ def getTargetInformation(targetName, schedulerType):
 
     # Didn't get any items out of the DB :(
     return {"status": "error", "payload": "The query returned nothing so we can't get the target information."}
+
+
+def checkCloudSchedulerTypes(targetName, requestedSchedulerType):
+    foundSchedulerTypeRequired = False
+
+    items = queryObj(None, "RecType-Target-targetName-" + str(targetName) + "-", "query", "dict", "beginsWith")
+    if items['status'] == "success":
+        items = items['payload']
+    else:
+        print items['payload']
+        return {'status': 'error', 'payload': items['payload']}
+
+    for target in items:
+        try:
+            ccqSchedulersAndTypes = json.loads(target['ccqSchedulersAndTypes'])
+        except Exception as e:
+            ccqSchedulersAndTypes = {}
+
+        for schedAndType in ccqSchedulersAndTypes:
+            if str(ccqSchedulersAndTypes[schedAndType]) == str(requestedSchedulerType).lower():
+                foundSchedulerTypeRequired = True
+
+        if foundSchedulerTypeRequired:
+            return {"status": "success", "payload": {"hasRequiredScheduler": True}}
+        else:
+            return {"status": "success", "payload": {"hasRequiredScheduler": False}}
+
+    # We didn't get any items back from our query
+    return {"status": "error", "payload": "Unable to check the provided cloud schedulers/types. The specified target " + str(targetName) + " was not found in the DB."}
 
 ########################################################################################################################
 #                                     Methods that deal with encryption and app Keys                                   #

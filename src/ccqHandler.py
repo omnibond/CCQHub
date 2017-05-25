@@ -164,7 +164,7 @@ def determineNextStepsForJob(jobId, targetName, schedType):
             return {"status": "error", "payload": values['payload']}
 
         with ccqHubVars.ccqVarLock:
-            ccqHubVars.jobMappings['job']['status'] = "Processing"
+            ccqHubVars.jobMappings[jobId]['status'] = "Processing"
             ccqHubVars.jobMappings[jobId]["targetType"] = str(targetType)
             ccqHubVars.jobMappings[jobId]["targetProtocol"] = str(targetProtocol)
             ccqHubVars.jobMappings[jobId]["targetAuthType"] = str(targetAuthType)

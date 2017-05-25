@@ -311,9 +311,13 @@ class sqlLite3Database(Database):
                                 index += attr + "-" + str(obj[attr])
 
                     if "holder" in index and holderAttr is not None:
-                        for z in range(len(obj[holderAttr])):
-                            temp = index.replace("holder", obj[holderAttr][z])
+                        if len(obj[holderAttr]) == 0:
+                            temp = index.replace("holder", "")
                             dataToInsert.append(('N/A', str(temp), str(name)))
+                        else:
+                            for z in range(len(obj[holderAttr])):
+                                temp = index.replace("holder", obj[holderAttr][z])
+                                dataToInsert.append(('N/A', str(temp), str(name)))
                     else:
                         dataToInsert.append(('N/A', str(index), str(name)))
                 except Exception as e:

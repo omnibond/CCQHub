@@ -18,6 +18,7 @@ import sys
 import traceback
 import uuid
 import os
+import json
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
@@ -96,16 +97,16 @@ def main():
                     # We only need to print the default Target of the scheduler type specified.
                     if schedulerType is not None:
                         try:
-                            schedulerTypesToDisplay[schedulerType] = str(item[schedulerType])
+                            defaultSchedulers = json.loads(item['defaultSchedulers'])
+                            schedulerTypesToDisplay[schedulerType] = str(defaultSchedulers[schedulerType])
                         except Exception as e:
-                            print "There was a problem trying to obtain the default Target for the " + str(schedulerType) + str(" scheduler type.")
+                            print "There was a problem trying to obtain the default Target for the " + str(schedulerType) + " scheduler type."
                             print str(traceback.format_exc(e))
                             sys.exit(0)
                     else:
-                        # We need to print the default Targets for all of the supported scheduler types
-                        for schedType in item:
-                            if schedType != "name" and schedType != "RecType" and schedType != "sharingObj" and schedType != "hash_key" and schedType != "jobScriptText":
-                                schedulerTypesToDisplay[schedType] = str(item[schedType])
+                        defaultSchedulers = json.loads(item['defaultSchedulers'])
+                        for schedType in defaultSchedulers:
+                            schedulerTypesToDisplay[schedType] = str(defaultSchedulers[schedType])
                 # Print the output
                 print formatOutput(schedulerTypesToDisplay)
                 sys.exit(0)

@@ -18,6 +18,7 @@ import sys
 import traceback
 import uuid
 import os
+import json
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
@@ -51,8 +52,7 @@ def main():
     parser.add_argument('-a', '--auth', help="The authorization mode that is specified for the target. Currently only appkey is supported, future ccqHub releases will include both ssh and username authorization modes as well.", default=None, choices=ccqHubMethods.ccqHubSupportedAuthenticationTypes)
     parser.add_argument('-pk', '--proxyKey', help="The proxy key is the app key created by CloudyCluster for use with a particular ccq scheduler. This argument should only be used when configuring a ccq scheduler.  This can also be a single proxy key or a comma separated list of proxy keys.", default=None)
     parser.add_argument('-hd', '--hubDefault', help="If this attribute is set to true the new target will be the default target for all jobs with the same scheduler type submitted to this ccqHub installation.", default=None, choices=["true", "false"])
-    #parser.add_argument('-td', '--targetDefault', help="If this attribute is specified, the new target will be the default target for all jobs submitted to this ccqHub installation.", action='store_true')
-
+    parser.add_argument('-cs', '--ccqSchedsTypes', help="A list of the scheduler names and scheduler types provided by the ccq target being created. This attribute is only used when configuring a ccq target. The format for this list is <scheduler_name>:<scheduler_type> and there can be one or more schedulers/scheduler types separated by commas.", default=None)
 
     #parser.add_argument('-un', '--userName', help="The user name that can be used in place of a key to .", default=None)
 
@@ -66,6 +66,12 @@ def main():
     auth = args.auth
     proxyKey = args.proxyKey
     hubDefault = args.hubDefault
+    ccqSchedulersAndTypes = args.ccqSchedsTypes
+
+    if schedType is not None:
+        if ccqSchedulersAndTypes is not None and schedType != "ccq":
+            print "The -cs argument can only be used when adding a ccq target. Please change the type of the target being added or remove the -cs argument."
+            sys.exit(0)
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
@@ -105,7 +111,7 @@ def main():
             if targetAddress is None:
                 if schedType == "ccq":
                     print "\nccq schedulers require that the target address be the address of the Login Instance and NOT the instance of the scheduler itself."
-                    targetAddress = ccqHubMethods.getInput("target address", "the publicly routable DNS name/IP address where the target can be reached", None, ["example.johndoe.com", "176.32.0.1", "10.2.5.6, example.janedoe.com"])
+                    targetAddress = ccqHubMethods.getInput("target address", "the publicly routable DNS name/IP addresses where the target can be reached", None, ["example.johndoe.com", "176.32.0.1", "10.2.5.6, example.janedoe.com"])
 
             if protocol is None:
                 protocol = ccqHubMethods.getInput("protocol", "the protocol that is used for submitting jobs at the target", ccqHubMethods.ccqHubSupportedProtocolTypes, None)
@@ -116,36 +122,74 @@ def main():
             if proxyKey is None:
                 done = False
                 attempts = 0
-                while not done and attempts < 2:
-                    if schedType != "ccq":
-                        # Currently only ccq schedulers require a proxy key attribute if the type isn't ccq then skip it for now
-                        pass
-                    elif auth == "appkey":
-                        proxyKey = ccqHubMethods.getInput("proxy key", "app key created by CloudyCluster for use with a particular ccq scheduler. This argument should only be used when configuring a ccq scheduler.  This can also be a single proxy key or a comma separated list of proxy keys.", None, ["87hjkdfa783jkadhfjh389adf783jkmyapikey", "89hkjklnklhakdghfad389myappkey"])
-                        done = True
-                    # elif auth == "ssh":
-                    #     proxyKey = ccqHubMethods.getInput("authorization identifier", "the identifier used by the authorization mode at specified target to authenticate the ccqHub job submission", None, ["~/mySshKey.pem", "~/.ssh/id.rsa"])
-                    # elif auth == "username":
-                    #     proxyKey = ccqHubMethods.getInput("authorization identifier", "the identifier used by the authorization mode at specified target to authenticate the ccqHub job submission", None, ["john", "jdoe34"])
+                while not done and attempts < 1:
+                    if schedType == "ccq":
+                        if auth == "appkey":
+                            proxyKey = ccqHubMethods.getInput("proxy key", "app key created by CloudyCluster for use with a particular ccq scheduler. This argument should only be used when configuring a ccq scheduler.  This can also be a single proxy key or a comma separated list of proxy keys", None, ["87hjkdfa783jkadhfjh389adf783jkmyapikey", "89hkjklnklhakdghfad389myappkey"])
+                            done = True
+                        # elif auth == "ssh":
+                        #     proxyKey = ccqHubMethods.getInput("authorization identifier", "the identifier used by the authorization mode at specified target to authenticate the ccqHub job submission", None, ["~/mySshKey.pem", "~/.ssh/id.rsa"])
+                        # elif auth == "username":
+                        #     proxyKey = ccqHubMethods.getInput("authorization identifier", "the identifier used by the authorization mode at specified target to authenticate the ccqHub job submission", None, ["john", "jdoe34"])
+                        else:
+                            attempts += 1
+                            print "The auth types ssh and username will be supported in a future ccqHub release. Currently the only supported authorization mode is appkey."
+                            sys.exit(0)
                     else:
-                        attempts += 1
-                        print "The auth types ssh and username will be supported in a future ccqHub release. Currently the only supported authorization mode is appkey."
+                        # Currently only ccq schedulers require a proxy key attribute if the type isn't ccq then skip it for now
+                        done = True
+                        pass
+
                 if not done:
                     print "Maximum number of input tries exceeded for authorization identifier. Please try again."
                     sys.exit(0)
 
             if hubDefault is None:
-                hubDefault = ccqHubMethods.getInput("default hub target", " is set to true if you want jobs of the same scheduler type to be sent to this target by default. If there is already another target configured to be the default scheduler for this scheduler type setting this to true will overwrite that target with the new target.", ["true", "false"], None)
+                hubDefault = ccqHubMethods.getInput("default hub target", " is set to true if you want jobs of the same scheduler type to be sent to this target by default. If there is already another target configured to be the default scheduler for this scheduler type setting this to true will overwrite that target with the new target", ["true", "false"], None)
+
+            if schedType == "ccq" and ccqSchedulersAndTypes is None:
+                # We need to get a list of scheduler types available through the ccq in order to perform job routing properly
+                ccqSchedulersAndTypes = ccqHubMethods.getInput("list of internal scheduler names and types provided by this ccq target", "the scheduler names and types that are available for use through the ccq target being set up. This could be a single scheduler and type or a comma seperated list of scheduler names and types", None, ["myScheduler:torque", "mySlurmScheduler:slurm", "mySlurmScheduler:slurm, myScheduler:torque"])
 
             if not checkTargetNameUniqueness(targetName):
                 print "\n The target name (" + str(targetName) + ") is already configured in this ccqHub installation. Please choose a new target name or use the ccqHubModifyTarget command to modify the existing target."
                 sys.exit(0)
 
+            # Local scheduler submission doesn't require a proxy key so we make it an empty list
             if str(proxyKey).lower() == "none":
-                proxyKey = ""
+                proxyKey = []
+            else:
+                proxyKey = proxyKey.split(",")
+
+            # Local scheduler submission doesn't need a target address so we make it an empty list
+            if str(targetAddress).lower() == "none":
+                targetAddress = []
+            else:
+                targetAddress = targetAddress.split(",")
+
+            # Local scheduler submission doesn't need a ccqSchedulersAndTypes list so we make it an empty list
+            if str(ccqSchedulersAndTypes).lower() == "none":
+                ccqSchedulersAndTypes = {}
+            else:
+                tempList = ccqSchedulersAndTypes.split(",")
+                ccqSchedulersAndTypes = {}
+                for schedAndType in tempList:
+                    splitItem = schedAndType.split(":")
+                    if len(splitItem) != 2:
+                        print "Malformed list of internal scheduler names and types provided. The format is <scheduler_name>:<scheduler_type>,<scheduler_name>:<scheduler_type>. Please check the list provided and try again."
+                        sys.exit(0)
+                    if str(splitItem[1]) not in ccqHubMethods.ccqHubSupportedSchedulerTypes:
+                        output = "Invalid scheduler type provided for the ccq target schedulers/types. The supported scheduler types are: "
+                        for schedTypeSupported in ccqHubMethods.ccqHubSupportedSchedulerTypes:
+                            output += str(schedTypeSupported) + ", "
+                        print str(output[:len(output)-2]) + ". Please check the list provided and try again."
+                        sys.exit(0)
+                    else:
+                        ccqSchedulersAndTypes[str(splitItem[0]).replace(" ", "")] = str(splitItem[1]).replace(" ", "")
+
             # All the required variables have now been defined we can now add the target to the DB
             # Currently there is no auth process with the target scheduler, we assume that the information added by the user is correct
-            obj = {"RecType": "Target", "name": str(uuid.uuid4()), "targetName": str(targetName), "targetAddress": targetAddress.split(","), "protocol": str(protocol), "schedulerType": str(schedType), "authType": str(auth), "proxyKey": [proxyKey.split(",")]}
+            obj = {"RecType": "Target", "name": str(uuid.uuid4()), "targetName": str(targetName), "targetAddress": targetAddress, "protocol": str(protocol), "schedulerType": str(schedType), "authType": str(auth), "proxyKey": proxyKey, "ccqSchedulersAndTypes": ccqSchedulersAndTypes}
             res = ccqHubMethods.handleObj("create", obj)
             if res['status'] != "success":
                 print res['payload']
@@ -157,13 +201,15 @@ def main():
                     if response['status'] == "success":
                         results = response['payload']
                         for item in results:
-                            item[schedType] = str(targetName)
+                            defaultSchedulers = json.loads(item['defaultSchedulers'])
+                            defaultSchedulers[schedType] = str(targetName)
+
+                            item['defaultSchedulers'] = defaultSchedulers
                             res = ccqHubMethods.handleObj("modify", item)
                             if res['status'] != "success":
                                 print "There was an error encountered when trying to update the DefaultTargets.\n"
                                 print res['payload']
                                 sys.exit(0)
-
                 print "Successfully added the target to ccqHub you may now submit jobs to this target through ccqHub using the target name or address."
                 sys.exit(0)
 
