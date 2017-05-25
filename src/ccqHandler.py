@@ -75,60 +75,72 @@ def createSchedulerObject(schedName, schedType, schedulerInstanceId, schedulerHo
         return {"status": "error", "payload": "Unable to create the scheduler object"}
 
 
-def jobSubmission(jobObj, ccAccessKey):
+def jobSubmission(jobObj):
     print "The timestamp when starting submitJob is: " + str(time.time())
-    jobScriptText = jobObj['jobScriptText']
     jobId = jobObj["name"]
+    remoteUserName = jobObj["userName"]
+    jobMD5Hash = ""
+    ccOptionsParsed = []
+
     jobName = jobObj['jobName']
-    userName = jobObj["userName"]
-    jobMD5Hash = jobObj['jobMD5Hash']
-    password = ""
-    submitHost = ""
-    jobScriptLocation = ""
-    ccOptionsParsed = ""
-    certLength = ""
+    jobScriptLocation = jobObj['jobScriptLocation']
+    jobScriptText = jobObj['jobScriptText']
+
+    # We need to get the job script object here because we need certain information that we can't get in just the job obj
+    results = ccqHubMethods.queryObj(None, "RecType-JobScript-name-" + str(jobName), "query", "dict")
+    if results['status'] == "success":
+        results = results['payload']
+    else:
+        return {'status': 'error', 'payload': results['payload']}
+    for jobScript in results:
+        jobMD5Hash = jobScript['jobMD5Hash']
+        ccOptionsParsed = jobScript['ccOptionsParsed']
+
+    targetAddresses = ccqHubVars.jobMappings[jobId]["targetAddresses"]
+    targetProxyKeys = ccqHubVars.jobMappings[jobId]["targetProxyKeys"]
+    targetProtocol = ccqHubVars.jobMappings[jobId]["targetProtocol"]
+    targetAuthType = ccqHubVars.jobMappings[jobId]["targetAuthType"]
+
+    with ccqHubVars.ccqHubVarLock:
+        ccqHubVars.jobMappings[jobId]['status'] = "ccqHubSubmitted"
+
+    encodedUserName = ""
+    encodedPassword = ""
+    valKey = ""
     dateExpires = ""
+    certLength = 1
 
-    numCpusRequested = jobObj["numCpusRequested"]
-    memoryRequested = jobObj["memoryRequested"]
-    jobWorkDir = jobObj["jobWorkDir"]
+    # Need to try and submit to all of the targetAddresses. Once one is successfully submitted we quit. If we get an error in the connection we retry with the other addresses
+    for address in targetAddresses:
+        url = "https://" + str(address) + "/srv/ccqsub"
 
-    with ccqHubVars.ccqVarLock:
-        ccqHubVars.jobMappings[jobId]['status'] = "Provisioning"
-        instancesToUse = ccqHubVars.jobMappings[jobId]['instancesToUse']
-    writeCcqVarsToFile()
-
-    encodedPassword = ccqHubMethods.encodeString("ccqpwdfrval", str(password))
-    encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(userName))
-    valKey = "unpw"
-    isCert = ""
-    attempts =0
-
-    url = "https://" + str(submitHost) + "/srv/ccqsub"
-    final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey" : str(ccAccessKey)}
-    data = json.dumps(final)
-    headers = {'Content-Type': "application/json"}
-    req = urllib2.Request(url, data, headers)
-    try:
-        res = urllib2.urlopen(req).read().decode('utf-8')
-        #print res
-        res = json.loads(res)
-        if res['status'] == "failure":
-            if not isCert and ccAccessKey is None:
-                print str(res['payload']['message']) + "\n\n"
-                attempts += 1
-            elif ccAccessKey is not None:
-                print "The key is not valid, please check your key and try again."
-                sys.exit(0)
-            else:
-                isCert = False
-                ccAccessKey = None
-        elif res['status'] == "error":
-            #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-            print res['payload']['message'] + "\n\n"
-    except Exception as e:
-        print traceback.format_exc(e)
-    return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
+        # Need to try and submit using all of the target proxy keys. Once one submits successfully we exit, if there is an error due to the key we retry.
+        for proxyKey in targetProxyKeys:
+            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(proxyKey), "remoteUserName": str(remoteUserName)}
+            data = json.dumps(final)
+            headers = {'Content-Type': "application/json"}
+            req = urllib2.Request(url, data, headers)
+            try:
+                #TODO re-write this to actually error if the connection fails or if the key doesn't validate properly
+                res = urllib2.urlopen(req).read().decode('utf-8')
+                #print res
+                res = json.loads(res)
+                if res['status'] == "failure":
+                    if not isCert and proxyKey is None:
+                        print str(res['payload']['message']) + "\n\n"
+                        attempts += 1
+                    elif proxyKey is not None:
+                        print "The key is not valid, please check your key and try again."
+                        sys.exit(0)
+                    else:
+                        isCert = False
+                        ccAccessKey = None
+                elif res['status'] == "error":
+                    #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
+                    print res['payload']['message'] + "\n\n"
+            except Exception as e:
+                print traceback.format_exc(e)
+            return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
 
 
 #Determine whether the job needs to create resources, wait, or use existing resources. This method determines what happens to the job
@@ -151,7 +163,6 @@ def determineNextStepsForJob(jobId, targetName, schedType):
             print values['payload']
         else:
             targetInfo = values['payload']
-            print targetInfo
 
         # The scheduler that the job is being submitted to is a Cloud based ccq scheduler so we need the authentication method, the protocol to use, and the DNS name
         targetType = targetInfo['schedulerType']
@@ -163,13 +174,15 @@ def determineNextStepsForJob(jobId, targetName, schedType):
         if values['status'] != "success":
             return {"status": "error", "payload": values['payload']}
 
-        with ccqHubVars.ccqVarLock:
+        with ccqHubVars.ccqHubVarLock:
             ccqHubVars.jobMappings[jobId]['status'] = "Processing"
             ccqHubVars.jobMappings[jobId]["targetType"] = str(targetType)
             ccqHubVars.jobMappings[jobId]["targetProtocol"] = str(targetProtocol)
             ccqHubVars.jobMappings[jobId]["targetAuthType"] = str(targetAuthType)
             ccqHubVars.jobMappings[jobId]["targetProxyKeys"] = targetProxyKeys
             ccqHubVars.jobMappings[jobId]["targetAddresses"] = targetAddresses
+            print "IN HERE"
+        print "out of here"
 
         values = ccqHubMethods.updateJobInDB({"status": "Processing", "targetType": str(targetType), "targetProtocol": str(targetProtocol), "targetAuthType": str(targetAuthType), "targetProxyKeys": targetProxyKeys, "targetAddresses": targetAddresses}, jobId)
         if values['status'] != "success":
@@ -183,6 +196,20 @@ def determineNextStepsForJob(jobId, targetName, schedType):
             # We need to do a local submit and start a process to monitor the progress of the job
             return {"status": "success", "payload": {"nextStep": "localSubmit"}}
 
+    #TODO need to add the code for the other types of states that the job can go into
+    elif ccqHubVars.jobMappings[jobId]['status'] == "ccqHubSubmitted":
+        print "Not yet implemented"
+    elif ccqHubVars.jobMappings[jobId]['status'] == "Completed":
+        print "Not yet implemented"
+    elif ccqHubVars.jobMappings[jobId]['status'] == "Error":
+        print "Not yet implemented"
+    elif ccqHubVars.jobMappings[jobId]['status'] == "Killed":
+        print "Not yet implemented"
+    elif ccqHubVars.jobMappings[jobId]['status'] == "Deleting":
+        print "Not yet implemented"
+    else:
+        #The job is still being processed by the scheduler and there is nothing we need to do at this time
+        print "Not yet implemented"
 
 def determineJobsToProcess():
     print "Inside of determineJobsToProcess"
@@ -210,23 +237,14 @@ def determineJobsToProcess():
 def cleanupDeletedJob(jobId):
     #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it
     print "SOMEHOW MADE IT INTO CLEANUPDELETEDJOB FUNCTION!!!!\n\n\n\n\n"
-    with ccqHubVars.ccqVarLock:
-        action = ccqHubVars.jobMappings[jobId]['status']
-        if action == "ExpandingCG":
-            ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[jobId]['instanceType'])][ccqHubVars.jobMappings[jobId]['computeGroup']]['jobsWaitingOnGroup'].remove(jobId)
-            ccqHubVars.jobMappings.pop(jobId)
-        elif action == "CCQueued":
-            for freeInstance in ccqHubVars.jobMappings[jobId]['instancesToUse']:
-                if freeInstance not in ccqHubVars.availableInstances:
-                    ccqHubVars.availableInstances.append(freeInstance)
-                    ccqHubVars.instanceInformation[freeInstance]['state'] = "None"
-            ccqHubVars.jobMappings.pop(jobId)
+    with ccqHubVars.ccqHubVarLock:
+        ccqHubVars.jobMappings.pop(jobId)
     writeCcqVarsToFile()
 
 
 def monitorJobs(scheduler):
     #Get the jobs from the list of job mappings maintained by ccqLauncher
-    with ccqHubVars.ccqVarLock:
+    with ccqHubVars.ccqHubVarLock:
         jobsToCheck = ccqHubVars.jobMappings
     writeCcqVarsToFile()
     try:
@@ -246,7 +264,7 @@ def monitorJobs(scheduler):
                 found = True
             #Need to free the instances belonging to the job and also remove it from any compute groups that are waiting to expand
             if not found:
-                with ccqHubVars.ccqVarLock:
+                with ccqHubVars.ccqHubVarLock:
                     print "Job " + str(job) + " has been deleted from the DB and is now be deleted from the memory object."
                     jobsToCheck[job]['status'] = "deleting"
                     try:
@@ -272,7 +290,7 @@ def monitorJobs(scheduler):
                         ccqHubVars.jobMappings[job]['instancesToUse'] = []
 
                         #Remove the job from the in-memory object since it is gone from the DB now
-                        with ccqHubVars.ccqVarLock:
+                        with ccqHubVars.ccqHubVarLock:
                             ccqHubVars.jobMappings.pop(job)
                         writeCcqVarsToFile()
 
@@ -283,7 +301,7 @@ def monitorJobs(scheduler):
                         print "There were no instances assigned to the job " + str(job) + "yet? Not fatal error!"
                         print traceback.format_exc(e)
                         #Remove the job from the in-memory object since it is gone from the DB now
-                        with ccqHubVars.ccqVarLock:
+                        with ccqHubVars.ccqHubVarLock:
                             ccqHubVars.jobMappings.pop(job)
                         writeCcqVarsToFile()
             else:
@@ -302,7 +320,7 @@ def monitorJobs(scheduler):
                     except Exception as e:
                         #There is currently no end time on the instance so we add it to the object
                         endTime = time.time()
-                        with ccqHubVars.ccqVarLock:
+                        with ccqHubVars.ccqHubVarLock:
                             ccqHubVars.jobMappings[job]['endTime'] = endTime
                         writeCcqVarsToFile()
 
@@ -328,7 +346,7 @@ def monitorJobs(scheduler):
 
                     if jobsToCheck[job]['status'] == "deleting":
                         try:
-                            with ccqHubVars.ccqVarLock:
+                            with ccqHubVars.ccqHubVarLock:
                                 ccqHubVars.jobMappings.pop(job)
                             writeCcqVarsToFile()
                         except Exception as e:
@@ -352,7 +370,7 @@ def monitorJobs(scheduler):
                                 print "There was an error trying to remove the old Jobs from the DB!"
                             else:
                                 try:
-                                    with ccqHubVars.ccqVarLock:
+                                    with ccqHubVars.ccqHubVarLock:
                                         ccqHubVars.jobMappings.pop(job)
                                     writeCcqVarsToFile()
                                 except Exception as e:
@@ -379,7 +397,7 @@ def checkToSeeIfJobStillRunningOnCluster(job, scheduler):
             print "Job " + str(job['name'] + " has finished running!")
             print "Updating the averages in the DB!"
 
-            with ccqHubVars.ccqVarLock:
+            with ccqHubVars.ccqHubVarLock:
                 ccqHubVars.jobMappings[job['name']]['status'] = "Completed"
                 ccqHubVars.jobMappings[job['name']]['endTime'] = endTime
                 for instance in ccqHubVars.jobMappings[job['name']]['instancesToUse']:
@@ -565,7 +583,6 @@ def delegateTasks():
                 print "Failed to find any jobs, sleeping for 20 seconds and checking for jobs again."
             else:
                 listOfJobsToProcess = results['payload']['jobs']
-                print "HERE"
 
                 #Process all of the jobs in the list in the order they were submitted
                 for job in results['payload']['sortedJobs']:
@@ -578,13 +595,14 @@ def delegateTasks():
                             if currentJob['status'] == "Killed":
                                 ccqHubVars.jobMappings[currentJob['name']]['status'] = currentJob['status']
                         except:
-                            with ccqHubVars.ccqVarLock:
+                            with ccqHubVars.ccqHubVarLock:
                                 ccqHubVars.jobMappings[currentJob['name']] = currentJob
 
                         print "THE CURRENT JOB IS: " + str(currentJob['name'])
 
                         # Now that we have the job we need to determine what the next step is for the job
                         values = determineNextStepsForJob(currentJob['name'], currentJob['targetName'], currentJob['schedType'])
+                        print values
                         if values['status'] != "success":
                             if values['status'] == "error":
                                 #ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
@@ -593,138 +611,24 @@ def delegateTasks():
                                 #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
                                 cleanupDeletedJob(currentJob['name'])
                         else:
-                            sys.exit(0)
-                            if values['payload']['nextStep'] == "submitJob":
-                                with ccqHubVars.ccqVarLock:
-                                    if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
-                                        ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
-                                    else:
-                                        if len(ccqHubVars.jobsInProvisioningState) < 10:
-                                            provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
-                                            provisioningThread.start()
-                                            #jobSubmission(currentJob, scheduler)
-                                            ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
-                                        else:
-                                            pass
+                            print values['payload']['nextStep']
+                            if values['payload']['nextStep'] == "cloudSubmit":
+                                values = jobSubmission(currentJob)
+                                # with ccqHubVars.ccqHubVarLock:
+                                #     if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
+                                #         ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
+                                #     else:
+                                #         if len(ccqHubVars.jobsInProvisioningState) < 10:
+                                #             provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
+                                #             provisioningThread.start()
+                                #             #jobSubmission(currentJob, scheduler)
+                                #             ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
+                                #         else:
+                                #             pass
 
-                                    if values['payload']['nextStep'] == "submitJob":
-                                        with ccqHubVars.ccqVarLock:
-                                            if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
-                                                ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
-                                            else:
-                                                if len(ccqHubVars.jobsInProvisioningState) < 10:
-                                                    provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
-                                                    provisioningThread.start()
-                                                    #jobSubmission(currentJob, scheduler)
-                                                    ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
-                                                else:
-                                                    pass
-
-                                    elif values['payload']['nextStep'] == "expandComputeGroup":
-                                        with ccqHubVars.ccqVarLock:
-                                            computeGroup = ccqHubVars.jobMappings[currentJob['name']]['computeGroup']
-                                            print "The computeGroup for the job is: " + str(computeGroup)
-
-                                        myTurn = False
-                                        try:
-                                            #Check to see if there is more than one job in the list of waiting compute groups. If there is check if the first one is the current jobId and if so start the expansion
-                                            if len(ccqHubVars.instanceTypesAndGroups[ccqHubVars.jobMappings[currentJob['name']]['instanceType']][computeGroup]['jobsWaitingOnGroup']) != 0:
-                                                if ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['jobsWaitingOnGroup'][0] == str(currentJob['name']) and ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['initStatus'] == "Ready" and ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['ccqAction'] != "expanding":
-                                                    print "It is my turn because my job name is at the beginning of the jobsWaitingOnGroup list, and the group is currently not expanding"
-                                                    myTurn = True
-                                            #Check to see if there are any jobs waiting and if not then it is our turn
-                                            elif len(ccqHubVars.instanceTypesAndGroups[ccqHubVars.jobMappings[currentJob['name']]['instanceType']][computeGroup]['jobsWaitingOnGroup']) == 0 and ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['initStatus'] == "Ready" and ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['ccqAction'] != "expanding":
-                                                print "It is my turn because the length of the jobsWaitingOnGroup array is 0 and the compute group is ready and the compute group is not expanding"
-                                                myTurn = True
-
-                                        except Exception as e:
-                                            #If we hit an exception print it out and assume it is our turn.
-                                            print "Exception checking to see if it is the current jobs turn for expansion"
-                                            print traceback.format_exc(e)
-                                            myTurn = True
-
-                                        if myTurn:
-                                            with ccqHubVars.ccqVarLock:
-                                                ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][computeGroup]['ccqAction'] = "expanding"
-                                                ccqHubVars.jobMappings[currentJob['name']]['isCreating'] = "true"
-                                            writeCcqVarsToFile()
-                                            expandCGThread = threading.Thread(target=expandComputeGroup, args=(currentJob, computeGroup, scheduler, clusterName))
-                                            expandCGThread.start()
-                                        else:
-                                            #It's not this job's turn yet, try again next time around
-                                            with ccqHubVars.ccqVarLock:
-                                                ccqHubVars.jobMappings[currentJob['name']]['isCreating'] = "false"
-                                            writeCcqVarsToFile()
-                                            pass
-
-                                    elif values['payload']['nextStep'] == "createComputeGroup":
-                                        if int(currentJob["numberOfInstancesRequested"]) <= 250:
-                                            maxInstances = 250
-                                        else:
-                                            maxInstances = int(currentJob["numberOfInstancesRequested"])
-
-                                        with ccqHubVars.ccqVarLock:
-                                            ccqHubVars.jobMappings[currentJob['name']]['isCreating'] = "true"
-                                            groupName = "ccauto-" + str(currentJob['name'])
-                                            print "SETTING THE GROUP OBJECT FOR: " + str(groupName) + " BEFORE LAUNCHING THE THREAD!"
-                                            try:
-                                                ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob["name"]]['instanceType'])]
-                                                ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob["name"]]['instanceType'])][str(groupName)] = {'ccqAction': "none", "maxInstances": int(maxInstances), "currentInstances": int(currentJob["numberOfInstancesRequested"]), "initStatus": "Not-Ready", "jobsWaitingOnGroup": []}
-
-                                            except Exception as e:
-                                                ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob["name"]]['instanceType'])] = {str(groupName): {'ccqAction': "none", "maxInstances": int(maxInstances), "currentInstances": int(currentJob["numberOfInstancesRequested"]), "initStatus": "Not-Ready", "jobsWaitingOnGroup": []}}
-                                        writeCcqVarsToFile()
-
-                                        #Add the compute group being created to the list of CGs in the DB
-                                        results = ccqHubMethods.queryObj(None, "ccqCGs-" + str(scheduler.schedName) + "-" + str(clusterName), "get", "dict")
-                                        if results['status'] == "success":
-                                            results = results['payload']
-                                        else:
-                                            values = ccqsubMethods.updateJobInDB({"status": "Error"}, currentJob['name'])
-                                            with ccqHubVars.ccqVarLock:
-                                                ccqHubVars.jobMappings[currentJob['name']]['status'] = "Error"
-                                            #ClusterMethods.writeToErrorLog({"messages": [values['payload']['error']], "traceback": [values['payload']['traceback']]}, "ccq Job " + str(currentJob['name']))
-                                        writeCcqVarsToFile()
-                                        #Put the compute group on the ccqCGs object
-                                        for item in results:
-                                            computeGroups = json.loads(item['computeGroups'])
-                                            computeGroups.append(groupName)
-                                            item['computeGroups'] = computeGroups
-                                            obj = {'action': 'modify', 'obj': item}
-                                            response = ccqHubMethods.handleObj(obj)
-
-                                        newCGThread = threading.Thread(target=launchNewComputeGroupForJob, args=(currentJob, vpcId, scheduler, clusterName))
-                                        newCGThread.start()
-                                    elif values['payload']['nextStep'] == "none":
-                                        print "The job has been submitted and no further action is required."
-                                    else:
-                                        #If the job is in the waitForExpansionToComplete state
-                                        #This job is still waiting to be able to perform it's expansion or submission
-                                        #Check to make sure that the job hasn't waited more than 20 minutes to expand, if it has the job is changed to allow it to spin up a new compute group
-                                        if values['payload']['nextStep'] == "waitForExpansionToComplete" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CreatingCG":
-                                            timeWaited = float(time.time()) - float(ccqHubVars.jobMappings[currentJob['name']]['expansionStartTime'])
-                                            difference = timedelta(seconds=timeWaited)
-                                            hours, remainder = divmod(difference.seconds, 3600)
-                                            minutes, seconds = divmod(remainder, 60)
-                                            totalMinutes = int(hours)*60 + int(minutes)
-                                            if totalMinutes > 50:
-                                                jobGroup = str(ccqHubVars.jobMappings[currentJob['name']]['computeGroup'])
-                                                with ccqHubVars.ccqVarLock:
-                                                    ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][jobGroup]['ccqAction'] = "none"
-                                                    if str(ccqHubVars.jobMappings[currentJob['name']]) in ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][jobGroup]['jobsWaitingOnGroup']:
-                                                        ccqHubVars.instanceTypesAndGroups[str(ccqHubVars.jobMappings[currentJob['name']]['instanceType'])][jobGroup]['jobsWaitingOnGroup'].remove(currentJob['name'])
-                                                    ccqHubVars.jobMappings[currentJob['name']]['status'] = "CreatingCG"
-                                                    ccqHubVars.jobMappings[currentJob['name']]['isCreating'] = "false"
-                                                    ccqHubVars.jobMappings[currentJob['name']]['instancesToUse'] = []
-                                                    values = ccqsubMethods.updateJobInDB({"status": "CreatingCG"}, currentJob['name'])
-                                                    ccqHubVars.jobMappings[currentJob['name']]['computeGroup'] = ""
-                                                writeCcqVarsToFile()
-                                        else:
-                                            #If the job is in the CreatingCG state then move forward
-                                            print "Still waiting for compute group to create"
-                            else:
-                                #Just submit the job and move on
-                                jobSubmission(currentJob, scheduler)
+                            elif values['payload']['nextStep'] == "localSubmit":
+                                # TODO do stuff here for the local job submission implementation
+                                print "Not yet implemented!"
                     except Exception as e:
                         print "Encountered a breaking error on job " + str(listOfJobsToProcess[job[0]])
                         print traceback.format_exc()
@@ -737,8 +641,8 @@ def main():
         print "Successfully initialized the global variables for ccq."
 
         #Set the locks for the threads to ensure data integrity and to ensure multiple threads do not write to the same ccq variable or ccq status file at once
-        ccqHubVars.ccqVarLock = threading.RLock()
-        ccqHubVars.ccqFileLock = threading.RLock()
+        ccqHubVars.ccqHubVarLock = threading.RLock()
+        ccqHubVars.ccqHubFileLock = threading.RLock()
         ccqHubVars.ccqHubDBLock = threading.RLock()
 
         #ccqCleanupThread = threading.Thread(target=monitorJobs)

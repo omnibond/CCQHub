@@ -118,7 +118,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
     quit = False
     while not done:
         try:
-            results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+            results = dbInterface.queryObj(None, "RecType-Job-name-" + str(jobId) + "-", "query", "dict", "beginsWith")
             if results['status'] == "success":
                 results = results['payload']
             else:
@@ -133,12 +133,15 @@ def updateJobInDB(fieldsToAddToJob, jobId):
                             quit = True
                         if not quit:
                             job[key] = value
-                job.save()
+                res = handleObj("modify", job)
+                if res['status'] != "success":
+                    return {"status": "error", "payload": res['payload']}
             if not quit:
                 return {"status": "success", "payload": "Success!"}
             elif quit:
                 return {"status": "deleting", "payload": "This job has been deleted by the user and should stop execution and all scaling activities!"}
         except Exception as e:
+            print traceback.format_exc(e)
             if timeElapsed >= maxTimeToWait:
                 return {"status": "error", "payload": "Failed to save out job status!"}
             time.sleep(timeToWait)
@@ -303,10 +306,10 @@ def putJobScriptInDB(jobScriptLocation, jobScriptText, jobName, ccOptionsParsed,
     obj = {}
     obj['action'] = "create"
     data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
-            'jobScriptLocation': str(jobScriptLocation), "dateFirstSubmitted": str(time.time()), "runTimes": {}, "numberOfTimesRun": str("0"), "createdByUser": str(userName), "jobMD5Hash": str(jobMD5Hash), "identity": str(identity), "targetName": str(targetName)}
-    for command in ccOptionsParsed:
-        if ccOptionsParsed[command] != "None":
-            data[command] = ccOptionsParsed[command]
+            'jobScriptLocation': str(jobScriptLocation), "dateFirstSubmitted": str(time.time()), "runTimes": {}, "numberOfTimesRun": str("0"), "createdByUser": str(userName), "jobMD5Hash": str(jobMD5Hash), "identity": str(identity), "targetName": str(targetName), "ccOptionsParsed": ccOptionsParsed}
+    # for command in ccOptionsParsed:
+    #     if ccOptionsParsed[command] != "None":
+    #         data[command] = ccOptionsParsed[command]
     obj['obj'] = data
     response = dbInterface.handleObj(**obj)
     if response['status'] == "success" or response['status'] == "partial":
