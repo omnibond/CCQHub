@@ -63,17 +63,17 @@ def ccqHubstat():
     targetName = VARS['targetName']
     remoteUserName = VARS['remoteUserName']
 
-    userName = remoteUserName
+    #TODO need to make sure that ccqHub is using the right ccAccessKey here......
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
     else:
         identity = values['payload']['identity']
+        cert = values['payload']['cert']
         encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(values['payload']['userName']))
         encodedPassword = ccqHubMethods.encodeString("ccqpwfrval", str(values['payload']['password']))
-        cert = values['payload']['cert']
 
     # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
     jobIdInCcq = None
@@ -145,16 +145,18 @@ def ccqHubdel():
     ccAccessKey = VARS['ccAccessKey']
     remoteUserName = VARS['remoteUserName']
 
-    userName = remoteUserName
+    #TODO need to make sure that ccqHub is actually passing a correct key here....don't think it is
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
     else:
         identity = values['payload']['identity']
-        encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(values['payload']['userName']))
+        userName = values['payload']['userName']
+        password = values['payload']['password']
         cert = values['payload']['cert']
+        encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(values['payload']['userName']))
 
     # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
     jobIdInCcq = None
@@ -210,7 +212,7 @@ def ccqHubsub():
     # If the job stays for a local scheduler then this argument is never needed.
     ccOptionsParsed['instanceType'] = ccOptionsParsed['requestedInstanceType']
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
@@ -219,9 +221,6 @@ def ccqHubsub():
         userName = values['payload']['userName']
         password = values['payload']['password']
         cert = values['payload']['cert']
-
-    #TODO figure out how to handle remote username vs regular username currently I think we just want to set the username to the remote userName
-    userName = remoteUserName
 
     #TODO implement pricing calls to the instances
 
@@ -241,25 +240,65 @@ def ccqHubsub():
             return {"status": "success", "payload": {"message": "The job has successfully been submitted to ccqHub. The job id is: " + str(generatedJobId) + ".\n You may use this job id to lookup the job's status using the ccqstat utility.", "cert": str(cert)}}
 
 
-def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey):
+def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName):
+    import ccqHubVars
+    ccqHubVars.init()
     print "Checking user Credentials!"
     validUser = False
     cert = None
-    decodedUserName = ""
-    decodedPassword = ""
     identity = ""
 
+    decodedUserName = ccqHubMethods.decodeString("ccqunfrval", str(userName))
+    decodedPassword = ccqHubMethods.decodeString("ccqpwdfrval", str(password))
+
     if str(ccAccessKey) != "None":
-        values = ccqHubMethods.validateAppKey(ccAccessKey)
+        values = ccqHubMethods.validateAppKey(ccAccessKey, remoteUserName)
         if values['status'] == "success":
             validUser = True
             identity = values['payload']['identity']
+            decodedUserName = remoteUserName
+            #decodedPassword = decodedPassword
             cert = None
 
-    #TODO implement these checks in the future when we are doing user/cert authentication
-    # Right now we need to just pass back the username since the key is the only thing being validated, if they have the right key the userName doesn't matter
-    decodedUserName = str(userName)
-    decodedPassword = str(password)
+    elif userName is not None and password is not None:
+        pamService = ""
+        # Load the PAM service to check from the Config File
+        values = ccqHubVars.retrieveSpecificConfigFileKey("PAM Configuration", "service")
+        if values['status'] != "success":
+            return {"status": "error", "payload": values['payload']}
+        else:
+            pamService = values['payload']
+        import pam
+        p = pam.pam()
+        onSystem = p.authenticate(str(decodedUserName), str(decodedPassword), str(pamService))
+        if not onSystem:
+            return {"status": "error", "payload": "Invalid credentials. Please try again."}
+
+        #TODO Add in other rule logic that would allow us to limit the users on the system that can utilize ccqHub, put in stub method for now
+        # Check authorization rules to make sure the user is allowed
+        results = checkRestrictions()
+        if values['status'] != "success":
+            return {"status": "error", "payload": results['payload']}
+        else:
+            # The user is authenticated and we now need to see if they already have an identity object and if not we need to create them one and generate an app key for them.
+            res = ccqHubMethods.queryObj(None, "RecType-Identity-userName-" + str(decodedUserName) + "-name-", "query", "json", "beginsWith")
+            if res['status'] != "success":
+                return {"status": "error", "payload": res['payload']}
+            else:
+                foundIdentity = False
+                for id in res['payload']:
+                    foundIdentity = True
+                    identity = id['name']
+                if not foundIdentity:
+                    # We did not find an identity for the user so we need to create one for them.
+                    actions = ["submitJob"]
+                    userNames = [str(decodedUserName)]
+                    results = ccqHubMethods.createIdentity(actions, userNames, False)
+                    if results['status'] != "success":
+                        return {"status": "error", "payload": results['payload']}
+                    else:
+                        # We successfully created a new Identity object for the user logging in via PAM.
+                        identity = results['payload']['identityUuid']
 
     # #Need to do checks here to make sure the user is authed
     # if valKey != "unpw" and not validUser:
@@ -299,3 +338,8 @@ def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessK
         return {"status": "error", "payload": "Invalid credentials. Please try again."}
     else:
         return {"status": "success", "payload": {"cert": cert, "identity": str(identity), "userName": str(decodedUserName), "password": str(decodedPassword)}}
+
+
+def checkRestrictions():
+    # Stub method for when we want to add other restrictions on which local users can utilize ccqHub
+    return {"status": "success", "payload": "User is authorized"}

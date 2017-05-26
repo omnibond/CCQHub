@@ -727,16 +727,23 @@ def getInput(fieldName, description, possibleValues, exampleValues):
     return temp
 
 
-#TODO need to finish fleshing this out, this may not be exactly what we are going for here.........I'm not sure we may want each key to be it's own identity object
-def createIdentity(identityName, actions):
+def createIdentity(actions, userNames, genKey):
     import uuid
     identityUuid = str(uuid.uuid4())
-    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "keyInfo": [], "keyId": [], "identityName": str(identityName)}}
+
+    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": [], "keyId": []}}
     validActions = policies.getValidActionsAndRequiredAttributes()
     for action in actions:
         if action in validActions:
             for attribute in validActions[action]:
-                obj['obj'][attribute] = validActions[action][attribute]
+                try:
+                    obj['obj'][attribute]
+                    # The identity has previous permissions that we need to add to
+                    temp = json.loads(obj['obj'][attribute])
+                    temp.append(validActions[action][attribute])
+                except Exception as e:
+                    # This attribute isn't already in the DB Item from another group
+                    obj['obj'][attribute] = validActions[action][attribute]
         else:
             return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to create the new ccqHub identity."}
 
@@ -745,7 +752,17 @@ def createIdentity(identityName, actions):
     if res['status'] != "success":
         return {"status": "error", "payload": res['payload']}
     else:
-        return {"status": "success", "message": "Successfully created the new ccqHubIdentity: " + str(identityName) + str("."), "payload": None}
+        generatedKey = None
+        # New Identity has been created, now we must generate the key if specified by the user
+        if genKey:
+            # We need to generate a new identity app key for the newly created identity
+            values = saveAndGenNewIdentityKey(identityUuid, None)
+            if values['status'] != "success":
+                return {"status": "error", "payload": values['payload']}
+            else:
+                generatedKey = values['payload']
+        # We successfully generated the new Identity and/or key for the identity if the user requested it.
+        return {"status": "success", "message": "Successfully created the new Identity.", "payload": {"idenityUuid": identityUuid, "generatedKey": generatedKey}}
 
 
 def createDefaultTargetsObject():
@@ -961,7 +978,7 @@ def checkCloudSchedulerTypes(targetName, requestedSchedulerType):
 
 
 #TODO this may need to be broken out into addUserNameToIdentity and generateAndAddKeyToIdentity.....not sure on that either
-def saveAndGenNewIdentityKey(identityName, keyId, actions):
+def saveAndGenNewIdentityKey(identityId, keyId):
     import binascii
     import uuid
     try:
@@ -994,29 +1011,27 @@ def saveAndGenNewIdentityKey(identityName, keyId, actions):
                 return {"status": "error", "payload": {"error": "CCQHub is designed to use Python 2.7.8 or greater, however it can be used with Python 2.6.x-2.7.7 by installing the backports.pbkdf2 package. Please upgrade your Python installation or install the backports.pbkdf2 package and try installing CCQHub again.", "traceback": ''.join(traceback.format_exc(e))}}
         #Add the newly generated key and the key's permissions to the key object
         #TODO in the future we may add the ability to create ccqHub Users and give them permissions within ccqHub
-        identityUuid = str(uuid.uuid4())
         key = binascii.hexlify(dk)
 
         fullKey = str(keyUuid) + ":" + str(encryptAlgNum) + ":" + str(key)
 
-        if keyId is not None or identityName is not None:
+        if keyId is None and identityId is None:
+            # We did not specify which identity to add the key to so we return an error
+            return {"status": "error", "payload": "An Identity name or Key Id must be specified when creating a new key."}
+        else:
             # The user wants to add this key to the same object as the user or key name passed, we need to modify the object
             # The user cannot add any new actions to this Identity just a new key that has the same permissions
             queryString = ""
             if keyId is not None:
-                queryString = "keyId-" + str(keyId)
-            elif identityName is not None:
-                queryString = "identityName-" + str(identityName)
+                queryString = "-keyId-" + str(keyId) + "-name-"
+            elif identityId is not None:
+                queryString = "-name-" + str(identityId)
             obj = {}
-            res = queryObj(None, "RecType-Identity-" + str(queryString) + "-name-", "query", "json", "beginsWith")
+            res = queryObj(None, "RecType-Identity" + str(queryString), "query", "json", "beginsWith")
             if res['status'] == "success":
                 objectList = res['payload']
                 for object in objectList:
-                    if identityName is not None:
-                        userNames = json.loads(object['userName'])
-                        userNames.append(str(identityName))
-                        object['userName'] = json.dumps(userNames)
-                    elif keyId is not None:
+                    if keyId is not None:
                         decryptedKeyList = decryptString(object['keyInfo'])
                         if decryptedKeyList['status'] != "success":
                             return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": decryptedKeyList['payload']}
@@ -1035,28 +1050,15 @@ def saveAndGenNewIdentityKey(identityName, keyId, actions):
                                 object['keyInfo'] = encryptedKeyObj['payload']
 
                     obj = {'action': "modify", 'obj': object}
-        else:
-            encryptedKeyObj = encryptString(json.dumps([str(fullKey)]))
-            if encryptedKeyObj['status'] != "success":
-                return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": encryptedKeyObj['payload']}
-            else:
-                obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": [], "keyInfo": encryptedKeyObj['payload'], "keyId": [str(keyUuid)]}}
-                validActions = policies.getValidActionsAndRequiredAttributes()
-                for action in actions:
-                    if action in validActions:
-                        for attribute in validActions[action]:
-                            obj['obj'][attribute] = validActions[action][attribute]
-                    else:
-                        return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to generate new user key."}
 
         # Save out the key to the DB, it has it's own object for storing key permissions and other information
         res = dbInterface.handleObj(**obj)
         if res['status'] != "success":
             return {"status": "error", "payload": res['payload']}
         else:
-            return {"status": "success", "message": "Successfully generated and saved key for ccqHub root access.", "payload": fullKey}
+            return {"status": "success", "message": "Successfully generated a new identity app key.", "payload": fullKey}
     except Exception as e:
-        return {"status": "error", "payload": {"error": "There was a problem generating the key for ccqHub root access.", "traceback": traceback.format_exc(e)}}
+        return {"status": "error", "payload": {"error": "There was a problem generating the new identity app key.", "traceback": traceback.format_exc(e)}}
 
 
 def encryptString(data):
@@ -1145,7 +1147,7 @@ def decryptString(data):
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
 
 
-def validateAppKey(ccAccessKey):
+def validateAppKey(ccAccessKey, remoteUserName):
     identityUuid = None
     response = queryObj(None, "RecType-Identity-keyId-" + str(ccAccessKey.split(":")[0]) + "-name-", "query", "json", "beginsWith")
     if response['status'] == "success":
@@ -1168,13 +1170,23 @@ def validateAppKey(ccAccessKey):
                 listOfUserKeys = []
 
             if str(ccAccessKey) in listOfUserKeys:
+                # Need to check and see if the key belongs to a proxyIdentity or not
+                isProxy = False
+                if str(remoteUserName) != "None":
+                    subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
+                    results = credentials.evaluatePermssions(subject, ["proxyUser"])
+                    if results['status'] != "success":
+                        return {"status": "error", "payload": results['payload']}
+                    else:
+                        # The key is authorized to be a proxyUser set the userName to be remoteUserName
+                        isProxy = True
                 #certDecodedPass = decryptString(tempItem['password'])
                 #if certDecodedPass['status'] != "success":
                 #    return {"status": "error", "payload": "App Key not valid."}
                 #else:
                 #    certDecodedPass = certDecodedPass['payload']
                 #    certDecodedUser = tempItem['userName']
-                return {"status": "success", "payload": {"message": "Successfully validated the key.", "identity": str(identityUuid)}}
+                return {"status": "success", "payload": {"message": "Successfully validated the key.", "identity": str(identityUuid), "isProxy": isProxy}}
             else:
                 #The AccessKey provided is not valid return error
                 return {"status": "error", "payload": "App Key not valid."}
@@ -1195,3 +1207,14 @@ def encodeString(k, field):
         enchars.append(enc)
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
+
+
+def decodeString(k, field):
+    dchars = []
+    field = base64.urlsafe_b64decode(str(field))
+    for i in xrange(len(field)):
+        k_c = k[i % len(k)]
+        dec = chr(abs(ord(field[i])) - ord(k_c) % 256)
+        dchars.append(dec)
+    ds = "".join(dchars)
+    return ds

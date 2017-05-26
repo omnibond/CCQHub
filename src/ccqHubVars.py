@@ -41,6 +41,7 @@ global jobMappings
 
 global ccqHubVarFileBackup
 
+
 def init():
     global ccqHubConfigFileLocation
     global ccqHubDBLock

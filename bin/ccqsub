@@ -49,6 +49,12 @@ def ccqsub():
     # Remote system username, for use when utilizing an app key to authenticate
     parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want the job to run as on the remote system.", default=None)
 
+    # Local username that will be used to authenticate with the PAM Module on the local machine. If the login in successful, the system checks if there is an identity object for that username and if so it uses that one but if not it creates one.
+    parser.add_argument('-un', metavar="<login_userName>", help="The username that will be used to authenticate with the PAM service running on the ccqHub server.", default=None)
+
+    # Remote system username, for use when utilizing an app key to authenticate
+    parser.add_argument('-pw', metavar="<login_password>", help="The password that will be used with the username to authenticate with the PAM service running on the ccqHub server.", default=None)
+
     # If there is a -js argument then the other arguments shouldn't be allowed to be specified due to possible conflicts
     # Job script file location
     parser.add_argument('-js', metavar='<job_script_location>', help="The path to the job script file that you want to submit to the scheduler.", default=None, required=True)
@@ -90,6 +96,9 @@ def ccqsub():
     args = parser.parse_args()
 
     appKeyLocation = args.i
+    remoteUserName = args.ru
+    userName = args.un
+    password = args.pw
 
     jobScriptLocation = args.js
     jobName = args.jn
@@ -107,7 +116,6 @@ def ccqsub():
     volumeType = args.vt
     certLength = args.cl
     justPrice = args.pr
-    remoteUserName = args.ru
 
     stdoutFileLocation = args.o
     stderrFileLocation = args.e
@@ -116,27 +124,22 @@ def ccqsub():
 
     currentDirectoryToStoreOutput = os.getcwd()
 
+    values = credentials.validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName)
+    if values['status'] != "success":
+        print values['payload']
+        sys.exit(0)
+    else:
+        userName = values['payload']['userName']
+        password = values['payload']['password']
+        ccAccessKey = values['payload']['ccAccessKey']
+        remoteUserName = values['payload']['remoteUserName']
+
     values = ccqHubMethods.readSubmitHostOutOfConfigFile()
     if values['status'] != "success":
         print values['payload']
         sys.exit(0)
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
-
-    if remoteUserName is None:
-        values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
-        if values['status'] != "success":
-            print values['payload']
-            sys.exit(0)
-        else:
-            promptRemoteUserName = values['payload']
-            if str(promptRemoteUserName).lower() == "no":
-                remoteUserName = getpass.getuser()
-            elif str(promptRemoteUserName).lower() == "yes":
-                remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
-            else:
-                print "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."
-                sys.exit(0)
 
     if jobScriptLocation is not None:
         status, output = commands.getstatusoutput("pwd")
@@ -260,46 +263,15 @@ def ccqsub():
         jobMD5Hash = values['payload']['md5']
 
     valKey = "unpw"
-    #userName = ""
-    password = ""
     attempts = 0
     validUser = False
     isCert = False
     dateExpires = ""
-    encodedUserName = ""
-    encodedPassword = ""
-
-    # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
-    #Check to see if the user has an API key, if so open the file and read in the key.
-    ccAccessKey = ""
-
-    if appKeyLocation is None:
-        values = credentials.validateCcqHubAdminKey(ccqHubMethods.ccqHubAdminJobSubmitKeyFile)
-        if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
-            sys.exit(0)
-        else:
-            ccAccessKey = values['payload']
-    else:
-        try:
-            ccAccessKey = open(str(appKeyLocation), "r")
-            for line in ccAccessKey:
-                ccAccessKey += line
-        except Exception as e:
-           ccAccessKey = None
+    encodedUserName = encodeString("ccqunfrval", str(userName))
+    encodedPassword = encodeString("ccqpwdfrval", str(password))
 
     if not validUser:
         while attempts < 5 and not validUser:
-            if not isCert and ccAccessKey is None:
-                print "This version of ccqHub only supports key based submissions. Please provide the ccqHub access key via the -i commandline option and try again."
-                sys.exit(0)
-                # userName = raw_input("Please enter your username: \n")
-                # password = getpass.getpass("Please enter your password: \n")
-                # encodedPassword = encodeString("ccqpwdfrval", str(password))
-                # encodedUserName = encodeString("ccqunfrval", str(userName))
-                # valKey = "unpw"
-
             url = "http://" + str(submitHost) + "/ccqHubSub"
             final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerToUse), "remoteUserName": str(remoteUserName)}
             data = json.dumps(final)
@@ -381,6 +353,7 @@ def validateSpotInstanceParameters(ccOptionsParsed):
             print "If you specify the use of spot instances you must specify a specific instance type.\n"
             sys.exit(0)
 
+
 def validateInstanceParameters(ccOptionsParsed):
     try:
         tempCPUs = int(ccOptionsParsed["numCpusRequested"])
@@ -426,6 +399,7 @@ def validateInstanceParameters(ccOptionsParsed):
         print "Invalid network type specified. The valid network types are: low, moderate, high, 10 Gigabit, or 20 Gigabit.\n"
         sys.exit(0)
 
+
 def generateJobMD5Hash(jobScriptText):
     try:
         #First strip out any whitespace characters that are in the job script
@@ -437,6 +411,7 @@ def generateJobMD5Hash(jobScriptText):
     except Exception as e:
         return {"status": "error", "payload": "There was a problem while checking the job script. Please try again in a little bit."}
 
+
 def encodeString(k, field):
     enchars = []
     for i in xrange(len(field)):
@@ -445,6 +420,7 @@ def encodeString(k, field):
         enchars.append(enc)
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
+
 
 def extractFieldsFromCert():
     try:

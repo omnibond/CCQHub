@@ -15,10 +15,24 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
+# These identify the valid actions and what attributes the Identity is required to have in order to be granted permission to perform the action
+actionsAndRequiredAttributes = {"ccqHubAdmin": {"groups": [], "attributes": {"ccqHubAdmin": "True"}},
+                                "proxyUser": {"groups": [], "attributes": {"proxyUser": "True"}},
+                                "submitJob": {"groups": [], "attributes": {"submitJob": "True"}}
+                               }
+
 def getValidActionsAndRequiredAttributes():
-    # These identify the valid actions and what attributes the Identity is required to have in order to be granted permission to perform the action
-    actionsAndRequiredAttributes = {"ccqHubAdmin": {"groups": [], "attributes": {"ccqHubAdmin": "True"}},
-                                    "proxyJob": {"groups": [], "attributes": {"proxyJob": "True"}},
-                                    "submitJob": {"groups": [], "attributes": {"submitJob": "True"}}
-                                   }
     return actionsAndRequiredAttributes
+
+
+def getValidActions(singleLine):
+    tempList = []
+    for key in actionsAndRequiredAttributes:
+        tempList.append(key)
+    if singleLine:
+        returnString = ""
+        for item in tempList:
+            returnString += item + ", "
+        return returnString[:len(returnString)-2]
+    else:
+        return tempList

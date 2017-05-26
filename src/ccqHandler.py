@@ -60,6 +60,7 @@ logDirectory = ""#ClusterMethods.logFileDirectory
 def performJobRouting():
     print "Placeholder for actual rules/routing policy evaluation and enforcement."
 
+
 def createSchedulerObject(schedName, schedType, schedulerInstanceId, schedulerHostName, schedulerIpAddress, clusterName):
     # Create the scheduler object that will be used to call the scheduler specific methods
     kwargs = {"schedName": schedName, "schedType": schedType, "instanceID": schedulerInstanceId,  "clusterName": clusterName, "instanceName": schedulerHostName, "schedulerIP": schedulerIpAddress}
@@ -111,41 +112,43 @@ def jobSubmission(jobObj):
     certLength = 1
 
     # Need to try and submit to all of the targetAddresses. Once one is successfully submitted we quit. If we get an error in the connection we retry with the other addresses
+    submittedSuccessfully = False
+    # Need to try and submit using all of the target proxy keys. Once one submits successfully we exit, if there is an error due to the key we retry.
     for address in targetAddresses:
-        url = "https://" + str(address) + "/srv/ccqsub"
-
-        # Need to try and submit using all of the target proxy keys. Once one submits successfully we exit, if there is an error due to the key we retry.
-        for proxyKey in targetProxyKeys:
-            final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(proxyKey), "remoteUserName": str(remoteUserName)}
-            data = json.dumps(final)
-            headers = {'Content-Type': "application/json"}
-            req = urllib2.Request(url, data, headers)
+        badURL = False
+        if not submittedSuccessfully:
             try:
-                #TODO re-write this to actually error if the connection fails or if the key doesn't validate properly
-                res = urllib2.urlopen(req).read().decode('utf-8')
-                #print res
-                res = json.loads(res)
-                if res['status'] == "failure":
-                    if not isCert and proxyKey is None:
-                        print str(res['payload']['message']) + "\n\n"
-                        attempts += 1
-                    elif proxyKey is not None:
-                        print "The key is not valid, please check your key and try again."
-                        sys.exit(0)
-                    else:
-                        isCert = False
-                        ccAccessKey = None
-                elif res['status'] == "error":
-                    #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-                    print res['payload']['message'] + "\n\n"
+                for proxyKey in targetProxyKeys:
+                    if not badURL:
+                        final = {"jobScriptLocation": str(jobScriptLocation), "jobScriptFile": str(jobScriptText), "jobName": str(jobName), "ccOptionsCommandLine": ccOptionsParsed, "jobMD5Hash": jobMD5Hash, "userName": str(encodedUserName), "password": str(encodedPassword), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "ccAccessKey": str(proxyKey), "remoteUserName": str(remoteUserName)}
+                        data = json.dumps(final)
+                        headers = {'Content-Type': "application/json"}
+                        url = "https://" + str(address) + "/srv/ccqsub"
+                        try:
+                            req = urllib2.Request(url, data, headers)
+                            res = urllib2.urlopen(req).read().decode('utf-8')
+                            res = json.loads(res)
+                        except Exception as e:
+                            # We couldn't connect to the url so we need to try the other one.
+                            badURL = True
+                        if not badURL:
+                            if res['status'] == "failure":
+                                if proxyKey is not None:
+                                    print "The key is not valid, please check your key and try again."
+                            elif res['status'] == "error":
+                                #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
+                                print res['payload']['message'] + "\n\n"
+                            elif res['status'] == "success":
+                                print "The job has been successfully submitted."
+                                return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
             except Exception as e:
-                print traceback.format_exc(e)
-            return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
+                # We encountered an unexpected exception
+                print ''.join(traceback.format_exc(e))
+    return {"status": "error", "payload": "Unable to successfully submit the job to the specified scheduler. The key or the target URL is invaild."}
 
 
 #Determine whether the job needs to create resources, wait, or use existing resources. This method determines what happens to the job
 def determineNextStepsForJob(jobId, targetName, schedType):
-
     #If the job has been killed there is no need to process it
     if ccqHubVars.jobMappings[jobId]['status'] == "Killed":
         return {"status": "success", "payload": {"nextStep": "none"}}
@@ -210,6 +213,7 @@ def determineNextStepsForJob(jobId, targetName, schedType):
     else:
         #The job is still being processed by the scheduler and there is nothing we need to do at this time
         print "Not yet implemented"
+
 
 def determineJobsToProcess():
     print "Inside of determineJobsToProcess"

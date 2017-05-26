@@ -20,6 +20,8 @@ import sys
 import policies
 import ccqHubMethods
 import traceback
+import getpass
+import ccqHubVars
 
 
 def checkAdminRights():
@@ -55,7 +57,7 @@ def validateCcqHubAdminKey(ccqHubAdminKeyPath):
             keyFile = open(str(ccqHubAdminKeyPath), "r")
             key = keyFile.readline()
         except Exception as e:
-            print "got here"
+            #print "got here"
             return {"status": "error", "payload": {"error": "Unable to read the key from the provided file. Please make sure you have the required permissions and try again.", "traceback": traceback.format_exc(e)}}
 
     return {"status": "success", "payload": key}
@@ -75,7 +77,7 @@ def validateCcqHubJobKey(ccqHubJobKeyPath):
 
     try:
         # Check to see if they have permission to use the ccqHubInstaller generated job key file if so use it, if not check the key they provided and if they did not provide one, prompt them for one before continuing.
-        keyFile = open(os.path.dirname(os.path.realpath(__file__)) + "/.." + str(ccqHubMethods.ccqHubAdminKeyFile), "r")
+        keyFile = open(os.path.dirname(os.path.realpath(__file__)) + "/.." + str(ccqHubMethods.ccqHubAdminJobSubmitKeyFile), "r")
         key = keyFile.readline()
         return {"status": "success", "payload": key}
     except Exception as e:
@@ -89,7 +91,7 @@ def validateCcqHubJobKey(ccqHubJobKeyPath):
             key = keyFile.readline()
             return {"status": "success", "payload": key}
         except Exception as e:
-            print "got here"
+            #print "got here"
             return {"status": "error", "payload": {"error": "Unable to read the key from the provided file. Please make sure you have the required permissions and try again.", "traceback": traceback.format_exc(e)}}
 
 
@@ -148,3 +150,70 @@ def evaluatePermssions(subject, actions):
             return {"status": "success", "payload": "This identity is authorized to perform the requested action(s)."}
     else:
         return {"status": "error", "payload": response['payload']}
+
+
+def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName):
+    # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
+    #Check to see if the user has an API key only if they do not specify a username or password, if they have access open the file and read in the key.
+    appKey = None
+
+    # Validate that the correct combination of commandline arguments have been provided.
+    if appKeyLocation is not None:
+        if userName is not None or password is not None:
+            return {"status": "failure", "payload": "The -un/-pw commandline arguments cannot be used with the -i/-ru arguments."}
+        else:
+            try:
+                keyFile = open(str(appKeyLocation), "r")
+                appKey = keyFile.readline()
+                subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
+                if remoteUserName is None:
+                    results = evaluatePermssions(subject, ["submitJob"])
+                else:
+                    results = evaluatePermssions(subject, ["submitJob", "proxyUser"])
+                if results['status'] != "success":
+                    return {"status": "failure", "payload": results['payload']}
+                else:
+                    return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
+            except Exception as e:
+                # The path the user specified is not valid, return failure
+                return {"status": "failure", "payload": "Unable to successfully validate the app key in the location provided."}
+    else:
+        # Check to see if the user has access to the admin job submit key and if so use that. If the user specifies a username/password then we do not check the admin job keys
+        if userName is None and password is None:
+            try:
+                keyFile = open(os.path.dirname(os.path.realpath(__file__)) + "/.." + str(ccqHubMethods.ccqHubAdminJobSubmitKeyFile), "r")
+                appKey = keyFile.readline()
+                if remoteUserName is None:
+                    values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
+                    if values['status'] != "success":
+                        print values['payload']
+                        sys.exit(0)
+                    else:
+                        promptRemoteUserName = values['payload']
+                        if str(promptRemoteUserName).lower() == "no":
+                            remoteUserName = getpass.getuser()
+                        elif str(promptRemoteUserName).lower() == "yes":
+                            remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+                        else:
+                            return {"status": "error", "payload": "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."}
+
+                # Check to make sure that the key has the required permissions to perform the work
+                subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
+                results = credentials.evaluatePermssions(subject, ["submitJob", "proxyUser"])
+                if results['status'] != "success":
+                    return {"status": "failure", "payload": results['payload']}
+                else:
+                    return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
+            except Exception as e:
+                # The user doesn't have access to the admin job key, pass and ask for userName/password
+                pass
+        # If we didn't find a valid key that we could use, prompt the user for the username/password if they are not passed as command line arguments
+        if appKey is None:
+            if password is not None:
+                if userName is None:
+                    userName = raw_input("Please enter your username: \n")
+
+            if userName is not None:
+                if password is None:
+                    password = getpass.getpass("Please enter your password: \n")
+            return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
