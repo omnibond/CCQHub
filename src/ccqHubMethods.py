@@ -731,7 +731,13 @@ def createIdentity(actions, userNames, genKey):
     import uuid
     identityUuid = str(uuid.uuid4())
 
-    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": [], "keyId": []}}
+    values = encryptString("[]")
+    if values['status'] != "success":
+        return {"status": "error", "payload": values['payload']}
+    else:
+        keyInfo = values['payload']
+
+    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": str(keyInfo), "keyId": []}}
     validActions = policies.getValidActionsAndRequiredAttributes()
     for action in actions:
         if action in validActions:
@@ -739,9 +745,15 @@ def createIdentity(actions, userNames, genKey):
                 try:
                     obj['obj'][attribute]
                     # The identity has previous permissions that we need to add to
-                    temp = json.loads(obj['obj'][attribute])
-                    temp.append(validActions[action][attribute])
+                    if type(obj['obj'][attribute]) is list:
+                        for item in validActions[action][attribute]:
+                            obj['obj'][attribute].append(item)
+                    elif type(obj['obj'][attribute]) is dict:
+                        print str(validActions[action])
+                        for item in validActions[action][attribute]:
+                            obj['obj'][attribute][item] = str(validActions[action][attribute][item])
                 except Exception as e:
+                    print ''.join(traceback.format_exc(e))
                     # This attribute isn't already in the DB Item from another group
                     obj['obj'][attribute] = validActions[action][attribute]
         else:
@@ -1031,23 +1043,22 @@ def saveAndGenNewIdentityKey(identityId, keyId):
             if res['status'] == "success":
                 objectList = res['payload']
                 for object in objectList:
-                    if keyId is not None:
-                        decryptedKeyList = decryptString(object['keyInfo'])
-                        if decryptedKeyList['status'] != "success":
-                            return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": decryptedKeyList['payload']}
-                        else:
-                            keyList = json.loads(decryptedKeyList['payload'])
-                            keyList.append(fullKey)
+                    decryptedKeyList = decryptString(object['keyInfo'])
+                    if decryptedKeyList['status'] != "success":
+                        return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": decryptedKeyList['payload']}
+                    else:
+                        keyList = json.loads(decryptedKeyList['payload'])
+                        keyList.append(fullKey)
 
-                            keyIdList = json.loads(object['keyId'])
-                            keyIdList.append(keyUuid)
-                            object['keyId'] = keyIdList
+                    keyIdList = json.loads(object['keyId'])
+                    keyIdList.append(keyUuid)
+                    object['keyId'] = keyIdList
 
-                            encryptedKeyObj = encryptString(json.dumps(keyList))
-                            if encryptedKeyObj['status'] != "success":
-                                return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": encryptedKeyObj['payload']}
-                            else:
-                                object['keyInfo'] = encryptedKeyObj['payload']
+                    encryptedKeyObj = encryptString(json.dumps(keyList))
+                    if encryptedKeyObj['status'] != "success":
+                        return {"status": "error", "message": "Unable to generate the identity app key please try again later.", "payload": encryptedKeyObj['payload']}
+                    else:
+                        object['keyInfo'] = encryptedKeyObj['payload']
 
                     obj = {'action': "modify", 'obj': object}
 
@@ -1174,7 +1185,7 @@ def validateAppKey(ccAccessKey, remoteUserName):
                 isProxy = False
                 if str(remoteUserName) != "None":
                     subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
-                    results = credentials.evaluatePermssions(subject, ["proxyUser"])
+                    results = credentials.evaluatePermissions(subject, ["proxyUser"])
                     if results['status'] != "success":
                         return {"status": "error", "payload": results['payload']}
                     else:

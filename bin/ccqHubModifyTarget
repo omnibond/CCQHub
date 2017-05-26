@@ -61,7 +61,7 @@ def main():
             key = values['payload']
 
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
-        results = credentials.evaluatePermssions(subject, ["ccqHubAdmin"])
+        results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
             print results['payload']
             sys.exit(0)

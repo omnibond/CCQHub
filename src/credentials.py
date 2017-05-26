@@ -95,17 +95,34 @@ def validateCcqHubJobKey(ccqHubJobKeyPath):
             return {"status": "error", "payload": {"error": "Unable to read the key from the provided file. Please make sure you have the required permissions and try again.", "traceback": traceback.format_exc(e)}}
 
 
-def evaluatePermssions(subject, actions):
+def evaluatePermissions(subject, actions):
     # Get the valid actions and requiredAttributes
     actionsAndRequiredAttributes = policies.getValidActionsAndRequiredAttributes()
 
+    for thing in actions:
+        if thing not in actionsAndRequiredAttributes:
+            return {"status": "error", "payload": "Invalid action specified"}
+
     typeOfSubject = subject['subjectType']
     subjectRecType = subject['subjectRecType']
-    shortKey = ""
-    if typeOfSubject == "key":
-        shortKey = str(subject['subject']).split(":")[0]
-        typeOfSubject = "keyId"
-    response = ccqHubMethods.queryObj(None, "RecType-" + str(subjectRecType) + "-" + str(typeOfSubject) + "-" + str(shortKey) + "-name-", "query", "json", "beginsWith")
+    uuid = ""
+    queryInformation = ""
+    if str(subjectRecType) == "Identity":
+        if typeOfSubject == "key":
+            shortKey = str(subject['subject']).split(":")[0]
+            queryInformation = "-keyId-" + str(shortKey)
+
+        elif typeOfSubject == "identityUuid":
+            queryInformation = ""
+            uuid = str(subject['subject'])
+
+        elif typeOfSubject == "userName":
+            queryInformation = "-userName-" + str(subject['subject'])
+
+        else:
+            return {"status": "error", "payload": "Invalid subject type provided."}
+
+    response = ccqHubMethods.queryObj(None, "RecType-" + str(subjectRecType) + str(queryInformation) + "-name-" + str(uuid), "query", "json", "beginsWith")
     tempRequiredObject = {}
     tempObtainedObject = {}
     if response['status'] == "success":
@@ -113,25 +130,32 @@ def evaluatePermssions(subject, actions):
         for identity in results:
             # We have the identity object
             try:
-                decKeyObj = ccqHubMethods.decryptString(identity['keyInfo'])
-                if decKeyObj['status'] != "success":
-                    return {"status": "error", "payload": decKeyObj['payload']}
-                else:
-                    if str(subject['subject']) not in decKeyObj['payload']:
-                        return {"status": "success", "payload": "This identity is authorized to perform the requested action(s)."}
+                # Check to make sure that the key they used is actually on the Identity
+                if typeOfSubject == "key":
+                    decKeyObj = ccqHubMethods.decryptString(identity['keyInfo'])
+                    if decKeyObj['status'] != "success":
+                        return {"status": "error", "payload": decKeyObj['payload']}
+                    else:
+                        if str(subject['subject']) not in decKeyObj['payload']:
+                            return {"status": "failure", "payload": "The identity is not authorized to perform the requested action(s)."}
+                if typeOfSubject == "userName":
+                    #TODO need to check and see if the userName belongs to the identity
+                    print "Work In Progress"
             except Exception as e:
-                print "Unable to validate the provided key."
-                print traceback.format_exc(e)
+                return {"status": "failure", "payload": "Unable to validate the provided key.\n" + str(''.join(traceback.format_exc(e)))}
 
             for action in actions:
                 if action in actionsAndRequiredAttributes:
                     for category in actionsAndRequiredAttributes[action]:
+                        #print category
                         if category == "attributes":
                             for attribute in actionsAndRequiredAttributes[action]:
                                 if attribute in identity:
-                                    tempObtainedObject[attribute] = str(identity[attribute])
-
-                                tempRequiredObject[attribute] = str(actionsAndRequiredAttributes[action][attribute])
+                                    tempObtainedObject[attribute] = identity[attribute]
+                                if attribute not in tempRequiredObject:
+                                   tempRequiredObject[attribute] = {}
+                                for other in actionsAndRequiredAttributes[action][attribute]:
+                                       tempRequiredObject[attribute][other] = actionsAndRequiredAttributes[action][attribute][other]
                         if category == "groups":
                             #TODO implement a way to check if the identity belongs to the group or not
                             pass
@@ -140,11 +164,25 @@ def evaluatePermssions(subject, actions):
 
         # If we find the permission we are looking for pop it off the required object and move on. Have to make temp object
         # because you can't modify a dict you are looping through.
-        for foundAttribute in tempObtainedObject:
-            if str(tempObtainedObject[foundAttribute]) == str(tempRequiredObject[foundAttribute]):
-                tempRequiredObject.pop(foundAttribute)
+        isValid = 0
+        if len(tempObtainedObject) == 0:
+            return {"status": "failure", "payload": "This identity is not authorized to perform the requested action(s)."}
 
-        if len(tempRequiredObject) == 0:
+        for foundAttribute in tempObtainedObject:
+            tempObtainedObject[foundAttribute] = json.loads(tempObtainedObject[foundAttribute])
+            for thing in tempObtainedObject[foundAttribute]:
+              try:
+                if str(tempObtainedObject[foundAttribute][thing]) == str(tempRequiredObject[foundAttribute][thing]):
+                    tempRequiredObject[foundAttribute].pop(thing)
+              except Exception as e:
+                  pass
+            try:
+                if len(tempRequiredObject[foundAttribute]) != 0:
+                   isValid += 1
+            except Exception as e:
+              pass
+
+        if isValid > 0:
             return {"status": "failure", "payload": "This identity is not authorized to perform the requested action(s)."}
         else:
             return {"status": "success", "payload": "This identity is authorized to perform the requested action(s)."}
@@ -167,9 +205,9 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
                 appKey = keyFile.readline()
                 subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
                 if remoteUserName is None:
-                    results = evaluatePermssions(subject, ["submitJob"])
+                    results = evaluatePermissions(subject, ["submitJob"])
                 else:
-                    results = evaluatePermssions(subject, ["submitJob", "proxyUser"])
+                    results = evaluatePermissions(subject, ["submitJob", "proxyUser"])
                 if results['status'] != "success":
                     return {"status": "failure", "payload": results['payload']}
                 else:
@@ -199,7 +237,7 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
 
                 # Check to make sure that the key has the required permissions to perform the work
                 subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
-                results = credentials.evaluatePermssions(subject, ["submitJob", "proxyUser"])
+                results = evaluatePermissions(subject, ["submitJob", "proxyUser"])
                 if results['status'] != "success":
                     return {"status": "failure", "payload": results['payload']}
                 else:
