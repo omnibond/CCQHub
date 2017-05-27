@@ -190,7 +190,62 @@ def evaluatePermissions(subject, actions):
         return {"status": "error", "payload": response['payload']}
 
 
-def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName):
+def validateAppKey(ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired):
+    identityUuid = None
+    response = ccqHubMethods.queryObj(None, "RecType-Identity-keyId-" + str(ccAccessKey.split(":")[0]) + "-name-", "query", "json", "beginsWith")
+    if response['status'] == "success":
+        results = response['payload']
+        for tempItem in results:
+            identityUuid = tempItem['name']
+            try:
+                # Need to load the list of keys from the user and decrypt the object
+                results = ccqHubMethods.decryptString(tempItem['keyInfo'])
+                if results['status'] != "success":
+                    return {"status": "error", "message": results['message']}
+                else:
+                    decryptedKeys = results['payload']
+            except Exception as e:
+                decryptedKeys = []
+
+            if len(decryptedKeys) != 0:
+                listOfUserKeys = json.loads(decryptedKeys)
+            else:
+                listOfUserKeys = []
+
+            if str(ccAccessKey) in listOfUserKeys:
+                # Need to check and see if the key belongs to a proxyIdentity or not
+                isProxy = False
+                if str(remoteUserName) != "None":
+                    subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
+                    results = evaluatePermissions(subject, ["proxyUser"])
+                    if results['status'] != "success":
+                        return {"status": "error", "payload": results['payload']}
+                    else:
+                        # The key is authorized to be a proxyUser set the userName to be remoteUserName
+                        isProxy = True
+
+                # Evaluate the additionalActions requested if there are any
+                for additionalAction in additionalActionsAndPermissionsRequired:
+                    subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
+                    results = evaluatePermissions(subject, additionalActionsAndPermissionsRequired[additionalAction])
+                    print results
+                    if results['status'] != "success":
+                        return {"status": "failure", "payload": results['payload']}
+
+                return {"status": "success", "payload": {"message": "Successfully validated the key.", "identity": str(identityUuid), "isProxy": isProxy}}
+            else:
+                #The AccessKey provided is not valid return error
+                return {"status": "error", "payload": "App Key not valid."}
+
+        #If the APIKey object isn't found in the DB return not valid
+        return {"status": "error", "payload": "App Key not valid."}
+
+    else:
+        #If the APIKey object isn't found in the DB return not valid
+        return {"status": "error", "payload": "App Key not valid."}
+
+
+def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName, additionalActionsAndPermissionsRequired, bypassRemoteUserCheck):
     # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key only if they do not specify a username or password, if they have access open the file and read in the key.
     appKey = None
@@ -203,15 +258,50 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
             try:
                 keyFile = open(str(appKeyLocation), "r")
                 appKey = keyFile.readline()
-                subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
+
+                # Need to try and get the Identity out of the DB. If there is only one userName on it we will use that, if there is more then one it will prompt the user as to which userName to use, or if there is a remoteUsername specified it will check if the user is a proxy user and if so allow them to use the remoteUserName.
                 if remoteUserName is None:
-                    results = evaluatePermissions(subject, ["submitJob"])
-                else:
-                    results = evaluatePermissions(subject, ["submitJob", "proxyUser"])
-                if results['status'] != "success":
-                    return {"status": "failure", "payload": results['payload']}
-                else:
-                    return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
+                    # Check the Identity object and see how many usernames we have, if there is more than one have the user choose one
+                    res = ccqHubMethods.queryObj(None, "RecType-Identity-keyId-" + str(str(appKey).split(":")[0]) + "-name-", "query", "json", "beginsWith")
+                    if res['status'] != "success":
+                        return {"status": "error", "payload": res['payload']}
+                    else:
+                        for ident in res['payload']:
+                            userNames = json.loads(ident['userName'])
+                            if len(userNames) == 1:
+                                userName = userNames[0]
+                            else:
+                                possibleNames = ""
+                                for name in userNames:
+                                    possibleNames += str(name) + ", "
+                                attempts = 0
+                                valid = False
+                                while attempts < 5:
+                                    userName = raw_input("Please specify the username that you want to use with this Identity. The possible values are: " + str(possibleNames) + "\n")
+                                    if str(userName) in userNames:
+                                        valid = True
+                                        attempts = 6
+                                    else:
+                                        attempts += 1
+                                if not valid:
+                                    return {"status": "failure", "payload": "Maximum number of input tries reached."}
+
+                if not bypassRemoteUserCheck:
+                    if remoteUserName is None and userName is None:
+                        values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
+                        if values['status'] != "success":
+                            print values['payload']
+                            sys.exit(0)
+                        else:
+                            promptRemoteUserName = values['payload']
+                            if str(promptRemoteUserName).lower() == "no":
+                                remoteUserName = getpass.getuser()
+                            elif str(promptRemoteUserName).lower() == "yes":
+                                remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+                            else:
+                                return {"status": "error", "payload": "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."}
+
+                return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
             except Exception as e:
                 # The path the user specified is not valid, return failure
                 return {"status": "failure", "payload": "Unable to successfully validate the app key in the location provided."}
@@ -221,27 +311,23 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
             try:
                 keyFile = open(os.path.dirname(os.path.realpath(__file__)) + "/.." + str(ccqHubMethods.ccqHubAdminJobSubmitKeyFile), "r")
                 appKey = keyFile.readline()
-                if remoteUserName is None:
-                    values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
-                    if values['status'] != "success":
-                        print values['payload']
-                        sys.exit(0)
-                    else:
-                        promptRemoteUserName = values['payload']
-                        if str(promptRemoteUserName).lower() == "no":
-                            remoteUserName = getpass.getuser()
-                        elif str(promptRemoteUserName).lower() == "yes":
-                            remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
-                        else:
-                            return {"status": "error", "payload": "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."}
 
-                # Check to make sure that the key has the required permissions to perform the work
-                subject = {"subjectType": "key", "subject": appKey, "subjectRecType": "Identity"}
-                results = evaluatePermissions(subject, ["submitJob", "proxyUser"])
-                if results['status'] != "success":
-                    return {"status": "failure", "payload": results['payload']}
-                else:
-                    return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
+                if not bypassRemoteUserCheck:
+                    if remoteUserName is None:
+                        values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
+                        if values['status'] != "success":
+                            print values['payload']
+                            sys.exit(0)
+                        else:
+                            promptRemoteUserName = values['payload']
+                            if str(promptRemoteUserName).lower() == "no":
+                                remoteUserName = getpass.getuser()
+                            elif str(promptRemoteUserName).lower() == "yes":
+                                remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
+                            else:
+                                return {"status": "error", "payload": "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."}
+
+                return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}
             except Exception as e:
                 # The user doesn't have access to the admin job key, pass and ask for userName/password
                 pass
@@ -254,4 +340,9 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
             if userName is not None:
                 if password is None:
                     password = getpass.getpass("Please enter your password: \n")
+
+            if userName is None and password is None:
+                userName = raw_input("Please enter your username: \n")
+                password = getpass.getpass("Please enter your password: \n")
+
             return {"status": "success", "payload": {"userName": userName, "password": password, "appKey": appKey, "remoteUserName": remoteUserName}}

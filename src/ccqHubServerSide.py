@@ -33,7 +33,9 @@ import argparse
 import urllib2
 import json
 import traceback
+import ccqHubVars
 import ccqHubMethods
+import credentials
 
 #tempJobScriptLocation = ClusterMethods.tempScriptJobLocation
 #tempJobOutputLocation = ClusterMethods.tempJobOutputLocation
@@ -62,35 +64,38 @@ def ccqHubstat():
     targetAddresses = VARS['targetAddresses']
     targetName = VARS['targetName']
     remoteUserName = VARS['remoteUserName']
+    listAllJobs = VARS['listAllJobs']
+    additionalActionsAndPermissionsRequired = VARS['additionalActionsAndPermissionsRequired']
 
     #TODO need to make sure that ccqHub is using the right ccAccessKey here......
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
     else:
         identity = values['payload']['identity']
         cert = values['payload']['cert']
+        userName = str(values['payload']['userName'])
+        password = str(values['payload']['password'])
         encodedUserName = ccqHubMethods.encodeString("ccqunfrval", str(values['payload']['userName']))
         encodedPassword = ccqHubMethods.encodeString("ccqpwfrval", str(values['payload']['password']))
 
-    # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
-    jobIdInCcq = None
-    results = ccqHubMethods.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
-    if results['status'] != "success":
-        return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
-    else:
-        results = results['payload']
-        for job in results:
-            try:
-                jobIdInCcq = job['jobIdInCcq']
-            except Exception as e:
-                # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to delete the job before it is processed.
-                ccqHubMethods.updateJobInDB({"status": "Deleting"}, jobId)
-
     # If they want the verbose status of the job we need to forward the request to the remote scheduler and get the status from it.
     if str(verbose).lower() == "true":
+        # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
+        jobIdInCcq = None
+        results = ccqHubMethods.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+        if results['status'] != "success":
+            return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
+        else:
+            results = results['payload']
+            for job in results:
+                try:
+                    jobIdInCcq = job['jobIdInCcq']
+                except Exception as e:
+                    # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to delete the job before it is processed.
+                    ccqHubMethods.updateJobInDB({"status": "Deleting"}, jobId)
         # TODO need to be able to loop through the multiple addresses for a target. Currently we just use the first one.
         url = "https://" + str(targetAddresses)[0] + "/srv/ccqstat"
         final = {"jobId": str(jobIdInCcq), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(targetName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey)}
@@ -109,8 +114,12 @@ def ccqHubstat():
     else:
         jobInformation = []
         if jobId == "all":
-            # Need to list all the jobs for the username that they provide
-            results = ccqHubMethods.queryObj(None, "RecType-Job-userName-" + str(userName) + "-", "query", "dict", "beginsWith")
+            if str(listAllJobs).lower() != "true":
+                # Need to list all the jobs for the username that they provide
+                results = ccqHubMethods.queryObj(None, "RecType-Job-userName-" + str(userName) + "-", "query", "dict", "beginsWith")
+            else:
+                # Need to list all the jobs for all the users
+                results = ccqHubMethods.queryObj(None, "RecType-Job-name-", "query", "dict", "beginsWith")
             if results['status'] != "success":
                 return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
             else:
@@ -144,10 +153,11 @@ def ccqHubdel():
     certLength = VARS['certLength']
     ccAccessKey = VARS['ccAccessKey']
     remoteUserName = VARS['remoteUserName']
+    additionalActionsAndPermissionsRequired = VARS['additionalActionsAndPermissionsRequired']
 
     #TODO need to make sure that ccqHub is actually passing a correct key here....don't think it is
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
@@ -207,12 +217,13 @@ def ccqHubsub():
     ccAccessKey = VARS['ccAccessKey']
     targetName = VARS['targetName']
     remoteUserName = VARS['remoteUserName']
+    additionalActionsAndPermissionsRequired = VARS['additionalActionsAndPermissionsRequired']
 
     # Since we are not calculating the instance type here we need to set it to None. It will be updated later on when we get the info from the ccq scheduler.
     # If the job stays for a local scheduler then this argument is never needed.
     ccOptionsParsed['instanceType'] = ccOptionsParsed['requestedInstanceType']
 
-    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName)
+    values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
         return {"status": "failure", "payload": {"message": str(values['payload']), "cert": str(None)}}
@@ -240,9 +251,7 @@ def ccqHubsub():
             return {"status": "success", "payload": {"message": "The job has successfully been submitted to ccqHub. The job id is: " + str(generatedJobId) + ".\n You may use this job id to lookup the job's status using the ccqstat utility.", "cert": str(cert)}}
 
 
-def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName):
-    import ccqHubVars
-    ccqHubVars.init()
+def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired):
     print "Checking user Credentials!"
     validUser = False
     cert = None
@@ -252,11 +261,12 @@ def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessK
     decodedPassword = ccqHubMethods.decodeString("ccqpwdfrval", str(password))
 
     if str(ccAccessKey) != "None":
-        values = ccqHubMethods.validateAppKey(ccAccessKey, remoteUserName)
+        values = credentials.validateAppKey(ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired)
         if values['status'] == "success":
             validUser = True
             identity = values['payload']['identity']
-            decodedUserName = remoteUserName
+            if str(remoteUserName) != "None":
+                decodedUserName = remoteUserName
             #decodedPassword = decodedPassword
             cert = None
 
@@ -291,7 +301,7 @@ def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessK
                     identity = id['name']
                 if not foundIdentity:
                     # We did not find an identity for the user so we need to create one for them.
-                    actions = ["submitJob"]
+                    actions = ccqHubMethods.ccqHubGeneratedIdentityDefaultPermissions
                     userNames = [str(decodedUserName)]
                     results = ccqHubMethods.createIdentity(actions, userNames, False)
                     if results['status'] != "success":
@@ -299,6 +309,15 @@ def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessK
                     else:
                         # We successfully created a new Identity object for the user logging in via PAM.
                         identity = results['payload']['identityUuid']
+
+                        # Evaluate the additionalActions requested if there are any
+                        for additionalAction in additionalActionsAndPermissionsRequired:
+                            subject = {"subjectType": "identityUuid", "subject": str(identity), "subjectRecType": "Identity"}
+                            results = credentials.evaluatePermissions(subject, additionalActionsAndPermissionsRequired[additionalAction])
+                            if results['status'] != "success":
+                                return {"status": "failure", "payload": results['payload']}
+
+                validUser = True
 
     # #Need to do checks here to make sure the user is authed
     # if valKey != "unpw" and not validUser:

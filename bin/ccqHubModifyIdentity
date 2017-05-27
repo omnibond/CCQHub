@@ -235,7 +235,7 @@ def main():
                                 generatedKeyFile = open(str(os.getcwdu()) + str(keyName), "w")
                                 generatedKeyFile.write(str(generatedKey))
                                 generatedKeyFile.close()
-                                os.system("chmod 400 " + str(os.getcwdu()))
+                                os.system("chmod 400 " + str(os.getcwdu()) + str(keyName))
                                 print "Successfully generated a key file for the Identity. The newly created key file is located at: " + str(os.getcwdu()) + str(keyName)
                                 sys.exit(0)
                             except Exception as e:

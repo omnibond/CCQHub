@@ -49,10 +49,19 @@ def ccqstat():
     # Print out error messages for CCQ
     parser.add_argument('-pe', action='store_true', help="Specifies that ccq should print out any ccq errors for the specified job to the commandline and exit.")
 
+    # Print out the jobs for all users
+    parser.add_argument('-la', action='store_true', help="Specifies that ccq should list all of the jobs in ccqHub regardless of the user. In order to run this command the Identity used must have the correct permissions.")
+
     parser.add_argument('-i', '-i', help="The path to the file containing the app key for the user.", default=None)
 
     # Remote system username, for use when utilizing an app key to authenticate
     parser.add_argument('-ru', metavar="<remote_username>", help="The username that you want to view the jobs for on the remote system.", default=None)
+
+    # Local username that will be used to authenticate with the PAM Module on the local machine. If the login in successful, the system checks if there is an identity object for that username and if so it uses that one but if not it creates one.
+    parser.add_argument('-un', metavar="<login_userName>", help="The username that will be used to authenticate with the PAM service running on the ccqHub server.", default=None)
+
+    # Remote system username, for use when utilizing an app key to authenticate
+    parser.add_argument('-pw', metavar="<login_password>", help="The password that will be used with the username to authenticate with the PAM service running on the ccqHub server.", default=None)
 
     args = parser.parse_args()
 
@@ -63,6 +72,20 @@ def ccqstat():
     printErrors = args.pe
     appKeyLocation = args.i
     remoteUserName = args.ru
+    userName = args.un
+    password = args.pw
+    listAllJobs = args.la
+
+    # Provides a way for admins to perform actions for all users to perform actions without needed a remote username
+    # The dictionary contains the action that the user wants to perform and the list of permissions required to perform it.
+    # ex: additionalActionsAndPermissionsRequired = {"listAllUsers": ["listAllUsers,submitJob"]}
+    # The bypassRemoteUserCheck is used by commands that do not require a username and is useful for if a user uses an key to authenticate it allows them to skip entering a remote username since it is not required by the command anyway
+    additionalActionsAndPermissionsRequired = {}
+    bypassRemoteUserCheck = False
+
+    if listAllJobs:
+        additionalActionsAndPermissionsRequired["listAllUserJobs"] = ["listAllUserJobs"]
+        bypassRemoteUserCheck = True
 
     jobInformation = {}
 
@@ -73,135 +96,79 @@ def ccqstat():
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
-    if remoteUserName is None:
-        values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
-        if values['status'] != "success":
-            print values['payload']
-            sys.exit(0)
-        else:
-            promptRemoteUserName = values['payload']
-            if str(promptRemoteUserName).lower() == "no":
-                remoteUserName = getpass.getuser()
-            elif str(promptRemoteUserName).lower() == "yes":
-                remoteUserName = ccqHubMethods.getInput("remote username", "username that you want the job to run as on the remote system. This user must exist on the remote system or the job will fail", None, None)
-            else:
-                print "Unsupported value found in the config file for the promptRemoteUserName field. This value must be either yes or no."
-                sys.exit(0)
+    values = credentials.validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName, additionalActionsAndPermissionsRequired, bypassRemoteUserCheck)
+    if values['status'] != "success":
+        print values['payload']
+        sys.exit(0)
+    else:
+        userName = values['payload']['userName']
+        password = values['payload']['password']
+        ccAccessKey = values['payload']['appKey']
+        remoteUserName = values['payload']['remoteUserName']
 
     valKey = "unpw"
-    #userName = ""
-    password = ""
     attempts = 0
-    validUser = False
-    isCert = False
     dateExpires = ""
-    encodedUserName = ""
-    encodedPassword = ""
+    encodedUserName = encodeString("ccqunfrval", str(userName))
+    encodedPassword = encodeString("ccqpwdfrval", str(password))
+    isCert = None
 
     # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
-    #Check to see if the user has an API key, if so open the file and read in the key.
-    ccAccessKey = ""
-
-    if appKeyLocation is None:
-        values = credentials.validateCcqHubAdminKey(ccqHubMethods.ccqHubAdminJobSubmitKeyFile)
-        if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+    # Need to get the target information here that we can pass to the backend.
+    targetAddresses = []
+    response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(schedulerName) + "-schedulerType-", "query", "json", "beginsWith")
+    if response['status'] == "success":
+        results = response['payload']
+        if len(results) > 0:
+            print "Unable to find the Target/Scheduler " + str(schedulerName) + " that was specified. Please check and make sure the target you are requesting has been configured."
             sys.exit(0)
         else:
-            ccAccessKey = values['payload']
-    else:
-        try:
-            ccAccessKey = open(str(appKeyLocation), "r")
-            for line in ccAccessKey:
-                ccAccessKey += line
-        except Exception as e:
-           ccAccessKey = None
+            for target in results:
+                targetAddresses = str(target['targetAddress']).replace(" ", "").split(",")
 
-    #TODO only need the username if the job id is all (I think). If they are requesting information about a specific job then we have the username on the job object.
-    # User must give a username when running ccqstat
-    if remoteUserName is None and jobId == "all":
-        remoteUserName = ccqHubMethods.getInput("remote username", "username that you want to view the jobs for on the remote system", None, None)
-
-    valKey = "unpw"
-    #userName = ""
-    password = ""
-    attempts = 0
-    validUser = False
-    isCert = False
-    dateExpires = ""
-    encodedUserName = ""
-    encodedPassword = ""
-
-    if not validUser:
-        while attempts < 5 and not validUser:
+    url = "http://" + str(submitHost) + "/ccqHubStat"
+    final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses), "remoteUserName": str(remoteUserName), "listAllJobs": listAllJobs, "additionalActionsAndPermissionsRequired": additionalActionsAndPermissionsRequired}
+    data = json.dumps(final)
+    headers = {'Content-Type': "application/json"}
+    req = urllib2.Request(url, data, headers)
+    try:
+        res = urllib2.urlopen(req).read().decode('utf-8')
+        #print res
+        res = json.loads(res)
+        if res['status'] == "failure":
             if not isCert and ccAccessKey is None:
-                print "This version of ccqHub only supports key based submissions. Please provide the ccqHub access key via the -i commandline option and try again."
+                print str(res['payload']['message']) + "\n\n"
+                attempts += 1
+            elif ccAccessKey is not None:
+                print "The key is not valid, please check your key and try again."
                 sys.exit(0)
-                # userName = raw_input("Please enter your username: \n")
-                # password = getpass.getpass("Please enter your password: \n")
-                # encodedPassword = encodeString("ccqpwdfrval", str(password))
-                # encodedUserName = encodeString("ccqunfrval", str(userName))
-                # valKey = "unpw"
-
-            # Need to get the target information here that we can pass to the backend.
-            targetAddresses = []
-            response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(schedulerName) + "-schedulerType-", "query", "json", "beginsWith")
-            if response['status'] == "success":
-                results = response['payload']
-                if len(results) > 0:
-                    print "Unable to find the Target/Scheduler " + str(schedulerName) + " that was specified. Please check and make sure the target you are requesting has been configured."
-                    sys.exit(0)
-                else:
-                    for target in results:
-                        targetAddresses = str(target['targetAddress']).replace(" ", "").split(",")
-
-            url = "http://" + str(submitHost) + "/ccqHubStat"
-            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses), "remoteUserName": str(remoteUserName)}
-            data = json.dumps(final)
-            headers = {'Content-Type': "application/json"}
-            req = urllib2.Request(url, data, headers)
-            try:
-                res = urllib2.urlopen(req).read().decode('utf-8')
-                #print res
-                res = json.loads(res)
-                if res['status'] == "failure":
-                    if not isCert and ccAccessKey is None:
-                        print str(res['payload']['message']) + "\n\n"
-                        attempts += 1
-                    elif ccAccessKey is not None:
-                        print "The key is not valid, please check your key and try again."
-                        sys.exit(0)
-                    else:
-                        isCert = False
-                        ccAccessKey = None
-                elif res['status'] == "error":
-                    #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-                    print res['payload']['message'] + "\n\n"
-                    sys.exit(0)
-                else:
-                    print res['payload']['message'] + "\n\n"
-                    validUser = True
-                    if valKey == "unpw" and res['payload']['cert'] is not None and str(res['payload']['cert']) != str("None"):
-                        certResponse = json.loads(res['payload']['cert'].replace("'", '"'))
-                        if "error" not in certResponse:
-                            newCcqCertFile = open(ccqCertDefaultFileLocation, "w")
-                            newCcqCertFile.write(json.dumps(certResponse))
-                            newCcqCertFile.close()
-                            print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)."
-                        else:
-                            print str(certResponse['error'])
-
-            except Exception as ex:
-                print traceback.format_exc(ex)
-                print "\n"
-                sys.exit(0)
-
-        if not validUser:
-            print "Maximum number of login attempts reached, please try again later."
+            else:
+                isCert = False
+                ccAccessKey = None
+        elif res['status'] == "error":
+            #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
+            print res['payload']['message'] + "\n\n"
             sys.exit(0)
         else:
-            sys.exit(0)
+            print res['payload']['message'] + "\n\n"
+            validUser = True
+            if valKey == "unpw" and res['payload']['cert'] is not None and str(res['payload']['cert']) != str("None"):
+                certResponse = json.loads(res['payload']['cert'].replace("'", '"'))
+                if "error" not in certResponse:
+                    newCcqCertFile = open(ccqCertDefaultFileLocation, "w")
+                    newCcqCertFile.write(json.dumps(certResponse))
+                    newCcqCertFile.close()
+                    print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)."
+                else:
+                    print str(certResponse['error'])
+
+    except Exception as ex:
+        print traceback.format_exc(ex)
+        print "\n"
+        sys.exit(0)
+
+    sys.exit(0)
+
 
 def encodeString(k, field):
     enchars = []
@@ -211,6 +178,7 @@ def encodeString(k, field):
         enchars.append(enc)
     ens = "".join(enchars)
     return base64.urlsafe_b64encode(ens)
+
 
 def extractFieldsFromCert():
     try:

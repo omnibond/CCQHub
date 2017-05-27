@@ -57,6 +57,8 @@ ccqHubAdminJobSubmitKeyFile = str(ccqHubKeyDir) + "/ccqHubJobSubmit.key"
 
 encryptAlgNum = "a"
 
+ccqHubGeneratedIdentityDefaultPermissions = ["submitJob"]
+
 # List of supported scheduler types. This is required in order to create a default target for each scheduler type.
 ccqHubSupportedSchedulerTypes = ["torque", "slurm", "ccq"]
 
@@ -1205,58 +1207,6 @@ def decryptString(data):
             return {"status": "success", "payload": decData}
     except Exception as e:
         return {"status": "error", "payload": {"error": "There was a problem decrypting the string.", "traceback": str(traceback.format_exc(e))}}
-
-
-def validateAppKey(ccAccessKey, remoteUserName):
-    identityUuid = None
-    response = queryObj(None, "RecType-Identity-keyId-" + str(ccAccessKey.split(":")[0]) + "-name-", "query", "json", "beginsWith")
-    if response['status'] == "success":
-        results = response['payload']
-        for tempItem in results:
-            identityUuid = tempItem['name']
-            try:
-                # Need to load the list of keys from the user and decrypt the object
-                results = decryptString(tempItem['keyInfo'])
-                if results['status'] != "success":
-                    return {"status": "error", "message": results['message']}
-                else:
-                    decryptedKeys = results['payload']
-            except Exception as e:
-                decryptedKeys = []
-
-            if len(decryptedKeys) != 0:
-                listOfUserKeys = json.loads(decryptedKeys)
-            else:
-                listOfUserKeys = []
-
-            if str(ccAccessKey) in listOfUserKeys:
-                # Need to check and see if the key belongs to a proxyIdentity or not
-                isProxy = False
-                if str(remoteUserName) != "None":
-                    subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
-                    results = credentials.evaluatePermissions(subject, ["proxyUser"])
-                    if results['status'] != "success":
-                        return {"status": "error", "payload": results['payload']}
-                    else:
-                        # The key is authorized to be a proxyUser set the userName to be remoteUserName
-                        isProxy = True
-                #certDecodedPass = decryptString(tempItem['password'])
-                #if certDecodedPass['status'] != "success":
-                #    return {"status": "error", "payload": "App Key not valid."}
-                #else:
-                #    certDecodedPass = certDecodedPass['payload']
-                #    certDecodedUser = tempItem['userName']
-                return {"status": "success", "payload": {"message": "Successfully validated the key.", "identity": str(identityUuid), "isProxy": isProxy}}
-            else:
-                #The AccessKey provided is not valid return error
-                return {"status": "error", "payload": "App Key not valid."}
-
-        #If the APIKey object isn't found in the DB return not valid
-        return {"status": "error", "payload": "App Key not valid."}
-
-    else:
-        #If the APIKey object isn't found in the DB return not valid
-        return {"status": "error", "payload": "App Key not valid."}
 
 
 def encodeString(k, field):

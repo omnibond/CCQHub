@@ -18,6 +18,7 @@
 # These identify the valid actions and what attributes the Identity is required to have in order to be granted permission to perform the action
 actionsAndRequiredAttributes = {"ccqHubAdmin": {"groups": [], "attributes": {"ccqHubAdmin": "True"}},
                                 "proxyUser": {"groups": [], "attributes": {"proxyUser": "True"}},
+                                "listAllUserJobs": {"groups": [], "attributes": {"listAllUserJobs": "True"}},
                                 "submitJob": {"groups": [], "attributes": {"submitJob": "True"}}
                                }
 

@@ -236,7 +236,7 @@ def main():
             os.system("chmod 400 " + str(prefix) + str(ccqHubMethods.ccqHubAdminKeyFile))
 
             # Need to generate a trusted key for submitting jobs that is separate from the admin key. This is the key that the user will utilize in their job submission.
-            permissions = ["submitJob", "proxyUser"]
+            permissions = ["submitJob", "proxyUser", "listAllUserJobs"]
             values = ccqHubMethods.createIdentity(permissions, [], True)
             if values['status'] != "success":
                 print values['payload']['error']
