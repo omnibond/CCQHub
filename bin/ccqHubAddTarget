@@ -159,22 +159,22 @@ def main():
             if str(proxyKey).lower() == "none":
                 proxyKey = []
             else:
-                proxyKey = proxyKey.split(",")
+                proxyKey = proxyKey.replace(" ", "").split(",")
 
             # Local scheduler submission doesn't need a target address so we make it an empty list
             if str(targetAddress).lower() == "none":
                 targetAddress = []
             else:
-                targetAddress = targetAddress.split(",")
+                targetAddress = targetAddress.replace(" ", "").split(",")
 
             # Local scheduler submission doesn't need a ccqSchedulersAndTypes list so we make it an empty list
             if str(ccqSchedulersAndTypes).lower() == "none":
                 ccqSchedulersAndTypes = {}
             else:
-                tempList = ccqSchedulersAndTypes.split(",")
+                tempList = ccqSchedulersAndTypes.replace(" ", "").split(",")
                 ccqSchedulersAndTypes = {}
                 for schedAndType in tempList:
-                    splitItem = schedAndType.split(":")
+                    splitItem = schedAndType.replace(" ", "").split(":")
                     if len(splitItem) != 2:
                         print "Malformed list of internal scheduler names and types provided. The format is <scheduler_name>:<scheduler_type>,<scheduler_name>:<scheduler_type>. Please check the list provided and try again."
                         sys.exit(0)

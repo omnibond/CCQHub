@@ -328,7 +328,7 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
     while not done:
         jobNums = [randint(0, 9) for p in range(0, 4)]
         for digit in jobNums:
-          generatedJobId += str(digit)
+            generatedJobId += str(digit)
 
         values = checkUniqueness("jobId", generatedJobId)
         if values['status'] == "success" and not values['payload']['isTaken']:
@@ -749,11 +749,11 @@ def createIdentity(actions, userNames, genKey):
                         for item in validActions[action][attribute]:
                             obj['obj'][attribute].append(item)
                     elif type(obj['obj'][attribute]) is dict:
-                        print str(validActions[action])
+                        #print str(validActions[action])
                         for item in validActions[action][attribute]:
                             obj['obj'][attribute][item] = str(validActions[action][attribute][item])
                 except Exception as e:
-                    print ''.join(traceback.format_exc(e))
+                    #print ''.join(traceback.format_exc(e))
                     # This attribute isn't already in the DB Item from another group
                     obj['obj'][attribute] = validActions[action][attribute]
         else:
@@ -774,7 +774,7 @@ def createIdentity(actions, userNames, genKey):
             else:
                 generatedKey = values['payload']
         # We successfully generated the new Identity and/or key for the identity if the user requested it.
-        return {"status": "success", "message": "Successfully created the new Identity.", "payload": {"idenityUuid": identityUuid, "generatedKey": generatedKey}}
+        return {"status": "success", "message": "Successfully created the new Identity.", "payload": {"identityUuid": identityUuid, "generatedKey": generatedKey}}
 
 
 def createDefaultTargetsObject():
@@ -835,6 +835,55 @@ def formatCcqstatOutput(jobs):
         return {"status": "success", "payload": "There are currently no jobs in the queue."}
 
 
+def formatOutputListIdentities(listOfIdentities, verbose):
+    if not verbose:
+        headerText = "\nIdentity Name                             Actions                \n"
+        headerText += "--------------------------------------------------------------------\n"
+    else:
+        headerText = ""
+    returnString = str(headerText)
+    verboseIndent = "" + (" " * 4)
+    for identity in sorted(listOfIdentities):
+        tempIdentity = listOfIdentities[identity]
+        tempString = ""
+        attributes = json.loads(tempIdentity['attributes'])
+        userNames = json.loads(tempIdentity['userName'])
+        keyIds = json.loads(tempIdentity['keyId'])
+        groups = json.loads(tempIdentity['groups'])
+
+        if not verbose:
+            identityUuid = tempIdentity['name'] + (" " * 6)
+            attrString = generateDisplayStringFromList(attributes, "", "")
+            attrString = attrString[2:]
+            if len(attrString) > 27:
+                # The list of attributes is too and has to be truncated for formatting purposes and padding added to the end
+                attrString = str(attrString[0:24]) + "..."
+            tempString += str(identityUuid) + str(attrString) + "\n"
+
+        if verbose:
+            identityUuid = tempIdentity['name']
+            identityHeaderText = "\nIdentity: " + str(identityUuid) + "\n"
+            attrString = generateDisplayStringFromList(attributes, "Actions", verboseIndent)
+            userNameString = generateDisplayStringFromList(userNames, "UserNames", verboseIndent)
+            groupString = generateDisplayStringFromList(groups, "Groups", verboseIndent)
+            keyIdString = generateDisplayStringFromList(keyIds, "KeyIds", verboseIndent)
+
+            tempString = str(identityHeaderText) + str(attrString) + "\n" + str(userNameString) + "\n" + str(groupString) + "\n" + str(keyIdString) + "\n"
+
+        returnString += tempString
+    return {"status": "success", "payload": returnString}
+
+
+def generateDisplayStringFromList(listOfValues, attributeDisplayName, indent):
+    if len(listOfValues) == 0:
+        return str(indent) + str(attributeDisplayName) + ": N/A"
+    tempString = str(indent) + str(attributeDisplayName) + ": "
+    for item in listOfValues:
+        tempString += str(item) + ", "
+    tempString = tempString[:len(tempString)-2]
+    return tempString
+
+
 def readSubmitHostOutOfConfigFile():
     parser = ConfigParser.ConfigParser()
 
@@ -852,9 +901,9 @@ def readSubmitHostOutOfConfigFile():
 
 
 def writeCcqVarsToFile():
-    with ccqHubVars.ccqVarLock:
-        with ccqHubVars.ccqFileLock:
-            with open(ccqHubVars.ccqVarFileBackup, "w") as ccqFile:
+    with ccqHubVars.ccqHubVarLock:
+        with ccqHubVars.ccqHubFileLock:
+            with open(ccqHubVars.ccqHubVarFileBackup, "w") as ccqFile:
                 json.dump({"jobMappings": ccqHubVars.jobMappings}, ccqFile)
 
 

@@ -23,9 +23,6 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
 import credentials
 
-def formatOutput(identitiesToDisplay):
-    print "STUFF"
-    return {"status": "success", "payload": str(identitiesToDisplay)}
 
 def main():
     parser = argparse.ArgumentParser(description="A ccqHub utility that allows an administrator to list created Identities in ccqHub.")
@@ -41,12 +38,16 @@ def main():
     # List the Identity that the user currently belongs to
     parser.add_argument('-ki', '--keyId', help="Display the Identity that the specified keyId belongs to.", default=None)
 
+    # Specifies if the user wants all the information about the identities or just the short version
+    parser.add_argument('-v', action='store_true', help="Specifies that ccqHubListIdentities should print all the information about the identities.")
+
     args = parser.parse_args()
 
     ccqHubAdminKeyPath = args.ccqHubAdminKeyPath
     identityUuid = args.identityUuid
     userName = args.userName
     keyId = args.keyId
+    verbose = args.v
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
@@ -107,7 +108,7 @@ def main():
             if len(identitiesToDisplay) == 0:
                 print notFoundMessage
             else:
-                values = formatOutput(identitiesToDisplay)
+                values = ccqHubMethods.formatOutputListIdentities(identitiesToDisplay, verbose)
                 if values['status'] != "success":
                     print values['payload']
                     sys.exit(0)

@@ -71,11 +71,11 @@ def main():
     keyIds = args.keyId
 
     if identityUuids is not None:
-        identityUuids = identityUuids.split(",")
+        identityUuids = identityUuids.replace(" ", "").split(",")
     if userNames is not None:
-        userNames = userNames.split(",")
+        userNames = userNames.replace(" ", "").split(",")
     if keyIds is not None:
-        keyIds = keyIds.split(",")
+        keyIds = keyIds.replace(" ", "").split(",")
 
     if identityUuids is None and userNames is None and keyIds is None:
         print "In order to delete an Identity you must specify either the IdentityUuid, a user associated with the identity to be deleted, or the key id of a key associated with the Identity to be deleted. Please specify one of these and try again."

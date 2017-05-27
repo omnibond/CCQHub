@@ -154,7 +154,7 @@ def ccqstat():
                     sys.exit(0)
                 else:
                     for target in results:
-                        targetAddresses = str(target['targetAddress']).split(",")
+                        targetAddresses = str(target['targetAddress']).replace(" ", "").split(",")
 
             url = "http://" + str(submitHost) + "/ccqHubStat"
             final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(schedulerName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(ccAccessKey), "targetName": str(schedulerName), "targetAddresses": str(targetAddresses), "remoteUserName": str(remoteUserName)}

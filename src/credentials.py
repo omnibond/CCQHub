@@ -153,9 +153,9 @@ def evaluatePermissions(subject, actions):
                                 if attribute in identity:
                                     tempObtainedObject[attribute] = identity[attribute]
                                 if attribute not in tempRequiredObject:
-                                   tempRequiredObject[attribute] = {}
+                                    tempRequiredObject[attribute] = {}
                                 for other in actionsAndRequiredAttributes[action][attribute]:
-                                       tempRequiredObject[attribute][other] = actionsAndRequiredAttributes[action][attribute][other]
+                                    tempRequiredObject[attribute][other] = actionsAndRequiredAttributes[action][attribute][other]
                         if category == "groups":
                             #TODO implement a way to check if the identity belongs to the group or not
                             pass
@@ -171,16 +171,16 @@ def evaluatePermissions(subject, actions):
         for foundAttribute in tempObtainedObject:
             tempObtainedObject[foundAttribute] = json.loads(tempObtainedObject[foundAttribute])
             for thing in tempObtainedObject[foundAttribute]:
-              try:
-                if str(tempObtainedObject[foundAttribute][thing]) == str(tempRequiredObject[foundAttribute][thing]):
-                    tempRequiredObject[foundAttribute].pop(thing)
-              except Exception as e:
-                  pass
+                try:
+                    if str(tempObtainedObject[foundAttribute][thing]) == str(tempRequiredObject[foundAttribute][thing]):
+                        tempRequiredObject[foundAttribute].pop(thing)
+                except Exception as e:
+                    pass
             try:
                 if len(tempRequiredObject[foundAttribute]) != 0:
                    isValid += 1
             except Exception as e:
-              pass
+                pass
 
         if isValid > 0:
             return {"status": "failure", "payload": "This identity is not authorized to perform the requested action(s)."}

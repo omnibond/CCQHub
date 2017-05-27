@@ -46,12 +46,12 @@ def main():
     genKey = args.genKey
 
     if actions is not None:
-        actions = actions.split(",")
+        actions = actions.replace(" ", "").split(",")
     else:
         actions = []
 
     if userNames is not None:
-        userNames = userNames.split(",")
+        userNames = userNames.replace(" ", "").split(",")
     else:
         userNames = []
 
@@ -63,7 +63,7 @@ def main():
             return {"status": "error", "payload": res['payload']}
         else:
             for id in res['payload']:
-                print "The username: " + str(user) + " is already associated with another ccqHub Identity. If you wish to create a new Identity for " + str(user) + " please use the ccqHubModifyIdentity utility to remove " + str(user) + " from the Identity."
+                print "The username: " + str(user) + " is already associated with another ccqHub Identity. If you wish to create a new Identity for " + str(user) + " please use the ccqHubModifyIdentity utility to remove " + str(user) + " from the other Identity."
                 sys.exit(0)
 
     # None of the userNames being added to the new Identity are in an existing Identity

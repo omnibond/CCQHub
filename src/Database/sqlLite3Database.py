@@ -296,7 +296,10 @@ class sqlLite3Database(Database):
                     index = "RecType" + "-" + RecType + "-"
                     for y in range(len(tempIndex[RecType])):
                         attr = tempIndex[RecType][y]
-
+                        try:
+                            obj[attr] = json.loads(obj[attr])
+                        except Exception as e:
+                            pass
                         objType = type(obj[attr])
                         if "list" in str(objType) or "dict" in str(objType):
                             holderAttr = attr
@@ -313,8 +316,8 @@ class sqlLite3Database(Database):
                     if "holder" in index and holderAttr is not None:
                         if len(obj[holderAttr]) == 0:
                             temp = index.replace("holder", "")
-                            dataToInsert.append(('N/A', str(temp), str(name)))
                         else:
+
                             for z in range(len(obj[holderAttr])):
                                 temp = index.replace("holder", obj[holderAttr][z])
                                 dataToInsert.append(('N/A', str(temp), str(name)))

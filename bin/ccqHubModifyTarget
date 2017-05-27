@@ -81,22 +81,22 @@ def main():
                         schedulerType = target['schedulerType']
 
                         # Loop through the target addresses to delete and remove them from the temp object
-                        for targetAddress in targetAddressesToDelete.split(","):
+                        for targetAddress in targetAddressesToDelete.replace(" ", "").split(","):
                             if targetAddress in targetAddresses:
                                 targetAddresses.remove(str(targetAddress))
 
                         # Loop through the target addresses to add and add them from the temp object
-                        for targetAddress in targetAddressesToAdd.split(","):
+                        for targetAddress in targetAddressesToAdd.replace(" ", "").split(","):
                             targetAddresses.append(str(targetAddress))
 
                         if schedulerType == "ccq":
                             # Loop through the authorization identifiers to delete and remove them from the temp object
-                            for proxyKey in proxyKeysToDelete.split(","):
+                            for proxyKey in proxyKeysToDelete.replace(" ", "").split(","):
                                 if proxyKey in proxyKeys:
                                     proxyKeys.remove(str(proxyKey))
 
                             # Loop through the authorization identifiers to add and add them from the temp object
-                            for proxyKey in proxyKeysToAdd.split(","):
+                            for proxyKey in proxyKeysToAdd.replace(" ", "").split(","):
                                 proxyKeys.append(str(proxyKey))
 
                         # If a new scheduler type is specified then change it in the object
