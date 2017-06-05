@@ -255,6 +255,8 @@ def main():
         from subprocess import Popen
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
         Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile)
+        # TODO cat out log file to make sure there aren't any errors
 
+        # TODO make all utilities prompt for things
 main()
 

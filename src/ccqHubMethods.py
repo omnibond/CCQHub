@@ -739,27 +739,31 @@ def createIdentity(actions, userNames, genKey):
     else:
         keyInfo = values['payload']
 
-    obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": str(keyInfo), "keyId": []}}
-    validActions = policies.getValidActionsAndRequiredAttributes()
-    for action in actions:
-        if action in validActions:
-            for attribute in validActions[action]:
-                try:
-                    obj['obj'][attribute]
-                    # The identity has previous permissions that we need to add to
-                    if type(obj['obj'][attribute]) is list:
-                        for item in validActions[action][attribute]:
-                            obj['obj'][attribute].append(item)
-                    elif type(obj['obj'][attribute]) is dict:
-                        #print str(validActions[action])
-                        for item in validActions[action][attribute]:
-                            obj['obj'][attribute][item] = str(validActions[action][attribute][item])
-                except Exception as e:
-                    #print ''.join(traceback.format_exc(e))
-                    # This attribute isn't already in the DB Item from another group
-                    obj['obj'][attribute] = validActions[action][attribute]
-        else:
-            return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to create the new ccqHub identity."}
+    # Check to see if there are any actions to be given to the identity and if so then iterate through them, if not add placeholders
+    if len(actions) == 0:
+        obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": str(keyInfo), "keyId": [], "attributes": {}, "groups": []}}
+    else:
+        obj = {'action': "create", 'obj': {"RecType": "Identity", "name": str(identityUuid), "userName": userNames, "keyInfo": str(keyInfo), "keyId": []}}
+        validActions = policies.getValidActionsAndRequiredAttributes()
+        for action in actions:
+            if action in validActions:
+                for attribute in validActions[action]:
+                    try:
+                        obj['obj'][attribute]
+                        # The identity has previous permissions that we need to add to
+                        if type(obj['obj'][attribute]) is list:
+                            for item in validActions[action][attribute]:
+                                obj['obj'][attribute].append(item)
+                        elif type(obj['obj'][attribute]) is dict:
+                            #print str(validActions[action])
+                            for item in validActions[action][attribute]:
+                                obj['obj'][attribute][item] = str(validActions[action][attribute][item])
+                    except Exception as e:
+                        #print ''.join(traceback.format_exc(e))
+                        # This attribute isn't already in the DB Item from another group
+                        obj['obj'][attribute] = validActions[action][attribute]
+            else:
+                return {"status": "failure", "payload": "The action requested: " + str(action) + " is not a valid ccqHub action. Unable to create the new ccqHub identity."}
 
     # Save out the key to the DB, it has it's own object for storing key permissions and other information
     res = dbInterface.handleObj(**obj)
