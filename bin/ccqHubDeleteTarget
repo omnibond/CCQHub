@@ -21,6 +21,7 @@ import os
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
 import ccqHubMethods
 import credentials
+import json
 
 
 def main():
@@ -62,12 +63,29 @@ def main():
                     sys.exit(0)
                 else:
                     # Now that we have the object we need to delete it.
+                    schedType = None
                     for item in results:
+                        schedType = item['schedType']
                         res = ccqHubMethods.handleObj("delete", item)
                         if res['status'] != "success":
                             print res['payload']
                             sys.exit(0)
                         else:
+                            response = ccqHubMethods.queryObj(None, "DefaultTargets", "get", "json")
+                            if response['status'] == "success":
+                                results = response['payload']
+                                for item in results:
+                                    # We need to check to see if the Target being deleted was a default Target and if so remove it from the default Target list
+                                    results = response['payload']
+                                    for defaultSched in results:
+                                        defaultSchedulers = json.loads(defaultSched['defaultSchedulers'])
+                                        if defaultSchedulers[schedType] == str(targetName):
+                                            defaultSchedulers[schedType] = "None"
+                                            item['defaultSchedulers'] = defaultSchedulers
+                                            res = ccqHubMethods.handleObj("modify", item)
+                                            if res['status'] != "success":
+                                                print "There was an error encountered when trying to update the DefaultTargets.\n"
+                                                print res['payload']
                             print "Successfully deleted the target (" + str(targetName) + ") from ccqHub."
                             sys.exit(0)
             else:

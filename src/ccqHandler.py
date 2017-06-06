@@ -95,15 +95,12 @@ def jobSubmission(jobObj):
         return {'status': 'error', 'payload': results['payload']}
     for jobScript in results:
         jobMD5Hash = jobScript['jobMD5Hash']
-        ccOptionsParsed = jobScript['ccOptionsParsed']
+        ccOptionsParsed = json.loads(jobScript['ccOptionsParsed'])
 
-    targetAddresses = ccqHubVars.jobMappings[jobId]["targetAddresses"]
-    targetProxyKeys = ccqHubVars.jobMappings[jobId]["targetProxyKeys"]
+    targetAddresses = json.loads(ccqHubVars.jobMappings[jobId]["targetAddresses"])
+    targetProxyKeys = json.loads(ccqHubVars.jobMappings[jobId]["targetProxyKeys"])
     targetProtocol = ccqHubVars.jobMappings[jobId]["targetProtocol"]
     targetAuthType = ccqHubVars.jobMappings[jobId]["targetAuthType"]
-
-    with ccqHubVars.ccqHubVarLock:
-        ccqHubVars.jobMappings[jobId]['status'] = "ccqHubSubmitted"
 
     encodedUserName = ""
     encodedPassword = ""
@@ -131,6 +128,7 @@ def jobSubmission(jobObj):
                         except Exception as e:
                             # We couldn't connect to the url so we need to try the other one.
                             badURL = True
+                            print ''.join(traceback.format_exc(e))
                         if not badURL:
                             if res['status'] == "failure":
                                 if proxyKey is not None:
@@ -139,12 +137,17 @@ def jobSubmission(jobObj):
                                 #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
                                 print res['payload']['message'] + "\n\n"
                             elif res['status'] == "success":
+                                with ccqHubVars.ccqHubVarLock:
+                                    ccqHubVars.jobMappings[jobId]['status'] = "ccqHubSubmitted"
+                                values = ccqHubMethods.updateJobInDB({"status": "ccqHubSubmitted"}, jobId)
+                                if values['status'] != "success":
+                                    return {"status": "error", "payload": values['payload']}
                                 print "The job has been successfully submitted."
                                 return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
             except Exception as e:
                 # We encountered an unexpected exception
                 print ''.join(traceback.format_exc(e))
-    return {"status": "error", "payload": "Unable to successfully submit the job to the specified scheduler. The key or the target URL is invaild."}
+    return {"status": "error", "payload": "Unable to successfully submit the job to the specified scheduler. The key or the target URL is invalid."}
 
 
 #Determine whether the job needs to create resources, wait, or use existing resources. This method determines what happens to the job
@@ -184,8 +187,6 @@ def determineNextStepsForJob(jobId, targetName, schedType):
             ccqHubVars.jobMappings[jobId]["targetAuthType"] = str(targetAuthType)
             ccqHubVars.jobMappings[jobId]["targetProxyKeys"] = targetProxyKeys
             ccqHubVars.jobMappings[jobId]["targetAddresses"] = targetAddresses
-            print "IN HERE"
-        print "out of here"
 
         values = ccqHubMethods.updateJobInDB({"status": "Processing", "targetType": str(targetType), "targetProtocol": str(targetProtocol), "targetAuthType": str(targetAuthType), "targetProxyKeys": targetProxyKeys, "targetAddresses": targetAddresses}, jobId)
         if values['status'] != "success":
@@ -202,17 +203,23 @@ def determineNextStepsForJob(jobId, targetName, schedType):
     #TODO need to add the code for the other types of states that the job can go into
     elif ccqHubVars.jobMappings[jobId]['status'] == "ccqHubSubmitted":
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Completed":
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Error":
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Killed":
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Deleting":
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
     else:
         #The job is still being processed by the scheduler and there is nothing we need to do at this time
         print "Not yet implemented"
+        return {"status": "success", "payload": "Not yet implemented"}
 
 
 def determineJobsToProcess():
@@ -618,6 +625,7 @@ def delegateTasks():
                             print values['payload']['nextStep']
                             if values['payload']['nextStep'] == "cloudSubmit":
                                 values = jobSubmission(currentJob)
+                                print values
                                 # with ccqHubVars.ccqHubVarLock:
                                 #     if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
                                 #         ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])

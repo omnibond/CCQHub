@@ -117,8 +117,8 @@ def main():
                     # We need to save out the newly modified default targets
                     results = response['payload']
                     defaultSchedulers = {}
-                    for item in results:
-                        defaultSchedulers = json.loads(item['defaultSchedulers'])
+                    for thing in results:
+                        defaultSchedulers = json.loads(thing['defaultSchedulers'])
                         defaultSchedulers[schedulerType] = str(targetName)
 
                     item['defaultSchedulers'] = defaultSchedulers

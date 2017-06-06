@@ -246,7 +246,6 @@ def validateAppKey(ccAccessKey, remoteUserName, additionalActionsAndPermissionsR
 
 
 def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName, additionalActionsAndPermissionsRequired, bypassRemoteUserCheck):
-    # TODO need to check to see if the user has access to the auto-generated job submit key and if so use that one. If not need to get the path to the key.
     #Check to see if the user has an API key only if they do not specify a username or password, if they have access open the file and read in the key.
     appKey = None
 
