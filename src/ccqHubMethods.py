@@ -1232,3 +1232,17 @@ def decodeString(k, field):
         dchars.append(dec)
     ds = "".join(dchars)
     return ds
+
+
+def parseCcqStatJobInformation(formattedJobInformation):
+    if "The specified job Id does not exist in the database." not in formattedJobInformation:
+        splitFormattedJobOutput = formattedJobInformation.split("\n")
+        outputDict = {}
+        for info in splitFormattedJobOutput[1:]:
+            if str(info) != "":
+                keyVal = info.split(": ")
+                if len(keyVal) > 0:
+                    outputDict[keyVal[0]] = keyVal[1]
+    else:
+        outputDict = {}
+    return {"status": "success", "payload": outputDict}

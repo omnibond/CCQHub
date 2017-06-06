@@ -137,9 +137,10 @@ def jobSubmission(jobObj):
                                 #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
                                 print res['payload']['message'] + "\n\n"
                             elif res['status'] == "success":
+                                ccqJobId = res['payload']['message'].split(":")[1][1:5]
                                 with ccqHubVars.ccqHubVarLock:
                                     ccqHubVars.jobMappings[jobId]['status'] = "ccqHubSubmitted"
-                                values = ccqHubMethods.updateJobInDB({"status": "ccqHubSubmitted"}, jobId)
+                                values = ccqHubMethods.updateJobInDB({"status": "ccqHubSubmitted", "jobIdInCcq": str(ccqJobId)}, jobId)
                                 if values['status'] != "success":
                                     return {"status": "error", "payload": values['payload']}
                                 print "The job has been successfully submitted."
