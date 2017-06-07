@@ -14,12 +14,12 @@ This project is seeded with many of the components of CCQ that has been a part o
 THe initial work will be to develop an on premise database and surrounding security infrastructure for cross environment HPC submission will be some of the initial work, along with recombining the pieces as a separate project.
 
 # prerequisite
-python 2.7.7
-pip install -U bottle
-pip install -U tornado
-pip install -U paramiko
-pip install -U python-pam
-pip install -U cryptography
+- python 2.7.7
+- pip install -U bottle
+- pip install -U tornado
+- pip install -U paramiko
+- pip install -U python-pam
+- pip install -U cryptography
 
 # Installation
  (for running as a central meta-scheduler for multiple users, other modes are not implimented yet)
