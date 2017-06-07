@@ -91,11 +91,6 @@ def ccqHubStat():
                     if job['status'] != "ccqHubSubmitted" and job['status'] != "Running":
                         return {"status": "success", "payload": {"message": "The verbose status is available only for jobs that are in the ccqHubSubmitted or Running states.", "cert": str(None)}}
 
-                    targetAddresses = json.loads(job["targetAddresses"])
-                    targetProxyKeys = json.loads(job["targetProxyKeys"])
-                    targetProtocol = job["targetProtocol"]
-                    targetAuthType = job["targetAuthType"]
-
                     try:
                         # Need to see if the job has been submitted to ccq in the cloud. If it has then we move on if it hasn't we return the non-verbose status and move on.
                         jobIdInCcq = job['jobIdInCcq']
@@ -104,6 +99,12 @@ def ccqHubStat():
                         values = ccqHubMethods.formatCcqstatOutput([job])
                         if values['status'] == "success":
                             return {"status": "success", "payload": {"message": str(values['payload']), "cert": str(cert)}}
+
+                    targetAddresses = json.loads(job["targetAddresses"])
+                    targetProxyKeys = json.loads(job["targetProxyKeys"])
+                    targetProtocol = job["targetProtocol"]
+                    targetAuthType = job["targetAuthType"]
+
         else:
             # The user wants to see the verbose status of all jobs on the remote target
             response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(targetName) + "-schedulerType-", "query", "json", "beginsWith")
