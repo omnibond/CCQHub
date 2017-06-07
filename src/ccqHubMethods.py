@@ -358,7 +358,7 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
         stderrFileLocation = ccOptionsParsed["stderrFileLocation"]
 
     obj = {'action': "create"}
-    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "targetName": str(targetName), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText), 'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "stderrFileLocation": str(stderrFileLocation), "stdoutFileLocation": str(stdoutFileLocation), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir), "status": "Pending", "identity": str(identity), "schedulerUsed": "TBD", "isSubmitted": False}
+    data = {'name': str(generatedJobId), "jobName": str(jobName), 'RecType': 'Job', "targetName": str(targetName), 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText), 'jobScriptLocation': str(jobScriptLocation), "dateSubmitted": str(time.time()), "startTime": time.time(), "instanceType": str(instanceType), "userName": str(userName), "stderrFileLocation": str(stderrFileLocation), "stdoutFileLocation": str(stdoutFileLocation), "isRemoteSubmit": str(isRemoteSubmit), "jobWorkDir": str(jobWorkDir), "status": "Pending", "identity": str(identity), "schedulerUsed": str(targetName), "isSubmitted": False}
     for command in ccOptionsParsed:
         if ccOptionsParsed[command] != "None":
             data[command] = ccOptionsParsed[command]

@@ -204,23 +204,23 @@ def determineNextStepsForJob(jobId, targetName, schedType):
     #TODO need to add the code for the other types of states that the job can go into
     elif ccqHubVars.jobMappings[jobId]['status'] == "ccqHubSubmitted":
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Completed":
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Error":
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Killed":
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
     elif ccqHubVars.jobMappings[jobId]['status'] == "Deleting":
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
     else:
         #The job is still being processed by the scheduler and there is nothing we need to do at this time
         print "Not yet implemented"
-        return {"status": "success", "payload": "Not yet implemented"}
+        return {"status": "success", "payload": {"nextStep": "notImplemented"}}
 
 
 def determineJobsToProcess():
@@ -322,9 +322,23 @@ def monitorJobs():
                                         elif res['status'] == "success":
                                             dataRetrieved = True
                                             values = ccqHubMethods.parseCcqStatJobInformation(res['payload']['message'])
-                                            print values
-                                            # TODO finish implementing the monitoring and updating of the job state
-                                            print "Need to implement the rest of this!"
+                                            databaseInfo = values['payload']
+                                            newStatus = ""
+                                            # Update the state in the ccqHub Database
+                                            if databaseInfo['status'] == "Pending":
+                                                newStatus = "RemotePending"
+                                            elif databaseInfo['status'] == "CreatingCG" or databaseInfo['status'] == "expandingCG":
+                                                newStatus = "AllocatingRemoteResources"
+                                            elif databaseInfo['status'] == "CreatingCG" or databaseInfo['status'] == "expandingCG":
+                                                newStatus = "RemoteProcessing"
+                                            else:
+                                                newStatus = databaseInfo['status']
+                                            values = ccqHubMethods.updateJobInDB({"status": str(newStatus)}, job['name'])
+                                            with ccqHubVars.ccqHubVarLock:
+                                                ccqHubVars.jobMappings[job['name']]['status'] = str(newStatus)
+                                            if values['status'] != "success":
+                                                print "Encountered an error while trying to update the status of the job in the ccqHub database with the information received from the remote scheduler."
+
                         except Exception as e:
                             # We encountered an unexpected exception
                             print ''.join(traceback.format_exc(e))
@@ -680,25 +694,36 @@ def delegateTasks():
                                 #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
                                 cleanupDeletedJob(currentJob['name'])
                         else:
-                            print values['payload']['nextStep']
-                            if values['payload']['nextStep'] == "cloudSubmit":
-                                values = jobSubmission(currentJob)
-                                print values
-                                # with ccqHubVars.ccqHubVarLock:
-                                #     if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
-                                #         ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
-                                #     else:
-                                #         if len(ccqHubVars.jobsInProvisioningState) < 10:
-                                #             provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
-                                #             provisioningThread.start()
-                                #             #jobSubmission(currentJob, scheduler)
-                                #             ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
-                                #         else:
-                                #             pass
+                            if currentJob['status'] == "Deleting":
+                                # The job has been marked for deletion and should be deleted
+                                results = ccqHubMethods.handleObj("delete", currentJob)
+                                if results['status'] != "success":
+                                    print "There was an error trying to delete the job (" + str(currentJob['name']) + ")  that was marked for deletion."
+                                print "The job (" + str(currentJob['name']) + ") has been marked for deletion and has been successfully deleted from the ccqHub Database."
+                                with ccqHubVars.ccqHubVarLock:
+                                    ccqHubVars.jobMappings.pop(currentJob['name'])
+                            else:
+                                print values['payload']['nextStep']
+                                if values['payload']['nextStep'] == "cloudSubmit":
+                                    values = jobSubmission(currentJob)
+                                    print values
+                                    # with ccqHubVars.ccqHubVarLock:
+                                    #     if currentJob['name'] in ccqHubVars.jobsInProvisioningState and ccqHubVars.jobMappings[currentJob['name']]['status'] != "Provisioning" and ccqHubVars.jobMappings[currentJob['name']]['status'] != "CCQueued":
+                                    #         ccqHubVars.jobsInProvisioningState.remove(currentJob['name'])
+                                    #     else:
+                                    #         if len(ccqHubVars.jobsInProvisioningState) < 10:
+                                    #             provisioningThread = threading.Thread(target=jobSubmission, args=(currentJob, scheduler))
+                                    #             provisioningThread.start()
+                                    #             #jobSubmission(currentJob, scheduler)
+                                    #             ccqHubVars.jobsInProvisioningState.append(currentJob['name'])
+                                    #         else:
+                                    #             pass
 
-                            elif values['payload']['nextStep'] == "localSubmit":
-                                # TODO do stuff here for the local job submission implementation
-                                print "Not yet implemented!"
+                                elif values['payload']['nextStep'] == "localSubmit":
+                                    # TODO do stuff here for the local job submission implementation
+                                    print "Not yet implemented!"
+                                else:
+                                    print "The nextStep state requested has not been implemented yet."
                     except Exception as e:
                         print "Encountered a breaking error on job " + str(listOfJobsToProcess[job[0]])
                         print traceback.format_exc()
