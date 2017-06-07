@@ -59,6 +59,9 @@ def ccqHubstat():
     listAllJobs = VARS['listAllJobs']
     additionalActionsAndPermissionsRequired = VARS['additionalActionsAndPermissionsRequired']
 
+    targetAddresses = []
+    targetProxyKeys = []
+
     values = validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired)
     if values['status'] != "success":
         #Credentials failed to validate on the server send back error message and failure
@@ -73,67 +76,85 @@ def ccqHubstat():
 
     # If they want the verbose status of the job we need to forward the request to the remote scheduler and get the status from it.
     if str(verbose).lower() == "true":
-        # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
-        results = ccqHubMethods.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
-        if results['status'] != "success":
-            return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
+        jobIdInCcq = None
+        if jobId != "all":
+            # We will need to get the jobId of the job at the scheduler out of the DB before sending it to the ccq service
+            results = ccqHubMethods.queryObj(None, "RecType-Job-name-" + str(jobId), "query", "dict", "beginsWith")
+            if results['status'] != "success":
+                return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
+            else:
+                results = results['payload']
+                for job in results:
+
+                    # Check to see if the job has been submitted to the remote scheduler before continuing.
+                    # TODO probably need to determine just what statuses we want to exclude here and how we are going to handle that
+                    if job['status'] != "ccqHubSubmitted" or job['status'] != "Running":
+                        return {"status": "success", "payload": {"message": "The verbose status is available only for jobs that are in the ccqHubSubmitted or Running states.", "cert": str(None)}}
+
+                    targetAddresses = json.loads(job["targetAddresses"])
+                    targetProxyKeys = json.loads(job["targetProxyKeys"])
+                    targetProtocol = job["targetProtocol"]
+                    targetAuthType = job["targetAuthType"]
+
+                    try:
+                        # Need to see if the job has been submitted to ccq in the cloud. If it has then we move on if it hasn't we return the non-verbose status and move on.
+                        jobIdInCcq = job['jobIdInCcq']
+                    except Exception as e:
+                        # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to send back the status that we have in the DB.
+                        values = ccqHubMethods.formatCcqstatOutput([job])
+                        if values['status'] == "success":
+                            return {"status": "success", "payload": {"message": str(values['payload']), "cert": str(cert)}}
+
         else:
-            results = results['payload']
-            for job in results:
+            # The user wants to see the verbose status of all jobs on the remote target
+            response = ccqHubMethods.queryObj(None, "RecType-Target-targetName-" + str(targetName) + "-schedulerType-", "query", "json", "beginsWith")
+            if response['status'] == "success":
+                results = response['payload']
+                for target in results:
+                    targetAddresses = json.loads(target["targetAddress"])
+                    targetProxyKeys = json.loads(target["proxyKey"])
+                    targetProtocol = target["protocol"]
+                    targetAuthType = target["authType"]
 
-                # Check to see if the job has been submitted to the remote scheduler before continuing.
-                # TODO probably need to determine just what statuses we want to exclude here and how we are going to handle that
-                if job['status'] != "ccqHubSubmitted" or job['status'] != "Running":
-                    return {"status": "success", "payload": "The verbose status is available only for jobs that are in the ccqHubSubmitted or Running states."}
-
-                targetAddresses = json.loads(job["targetAddresses"])
-                targetProxyKeys = json.loads(job["targetProxyKeys"])
-                targetProtocol = job["targetProtocol"]
-                targetAuthType = job["targetAuthType"]
+        # Need to try all of the targetAddresses. Once one has successfully returned we quit. If we get an error in the connection we retry with the other addresses
+        submittedSuccessfully = False
+        # Need to try all of the target proxy keys. Once one has successfully returned we exit, if there is an error due to the key we retry.
+        for address in targetAddresses:
+            badURL = False
+            if not submittedSuccessfully:
                 try:
-                    # Need to see if the job has been submitted to ccq in the cloud. If it has then we move on if it hasn't we return the non-verbose status and move on.
-                    jobIdInCcq = job['jobIdInCcq']
-                    # Need to try and submit to all of the targetAddresses. Once one is successfully submitted we quit. If we get an error in the connection we retry with the other addresses
-                    submittedSuccessfully = False
-                    # Need to try and submit using all of the target proxy keys. Once one submits successfully we exit, if there is an error due to the key we retry.
-                    for address in targetAddresses:
-                        badURL = False
-                        if not submittedSuccessfully:
+                    for proxyKey in targetProxyKeys:
+                        if not badURL:
+                            url = "https://" + str(address) + "/srv/ccqstat"
+                            final = {"jobId": str(jobId), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(targetName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(proxyKey), "printOutputLocation": False, "printInstancesForJob": False, "remoteUserName": str(remoteUserName), "databaseInfo": False}
+                            data = json.dumps(final)
+                            headers = {'Content-Type': "application/json"}
                             try:
-                                for proxyKey in targetProxyKeys:
-                                    if not badURL:
-                                        url = "https://" + str(address) + "/srv/ccqstat"
-                                        final = {"jobId": str(jobIdInCcq), "userName": str(encodedUserName), "password": str(encodedPassword), "verbose": verbose, "instanceId": None, "jobNameInScheduler": None, "schedulerName": str(targetName), 'schedulerType': None, 'schedulerInstanceId': None, 'schedulerInstanceName': None, 'schedulerInstanceIp': None, 'printErrors': str(printErrors), "valKey": str(valKey), "dateExpires": str(dateExpires), "certLength": str(certLength), "jobInfoRequest": False, "ccAccessKey": str(proxyKey)}
-                                        data = json.dumps(final)
-                                        headers = {'Content-Type': "application/json"}
-                                        try:
-                                            req = urllib2.Request(url, data, headers)
-                                            res = urllib2.urlopen(req).read().decode('utf-8')
-                                            res = json.loads(res)
-                                        except Exception as e:
-                                            # We couldn't connect to the url so we need to try the other one.
-                                            badURL = True
-                                            print ''.join(traceback.format_exc(e))
-                                        if not badURL:
-                                            if res['status'] == "failure":
-                                                if proxyKey is not None:
-                                                    print "The key is not valid, please check your key and try again."
-                                            elif res['status'] == "error":
-                                                #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-                                                print res['payload']['message'] + "\n\n"
-                                            elif res['status'] == "success":
-                                                submittedSuccessfully = True
-                                                return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
+                                req = urllib2.Request(url, data, headers)
+                                res = urllib2.urlopen(req).read().decode('utf-8')
+                                res = json.loads(res)
                             except Exception as e:
-                                # We encountered an unexpected exception
+                                # We couldn't connect to the url so we need to try the other one.
+                                badURL = True
                                 print ''.join(traceback.format_exc(e))
-                    return {"status": "error", "payload": "Unable to successfully get the status of the job specified. Please re-check the credentials and try again."}
+                            if not badURL:
+                                if res['status'] == "failure":
+                                    if proxyKey is not None:
+                                        print "The key is not valid, please check your key and try again."
+                                elif res['status'] == "error":
+                                    #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
+                                    print res['payload']['message'] + "\n\n"
+                                    return {"status": "error", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
+                                elif res['status'] == "success":
+                                    submittedSuccessfully = True
+                                    if "There are currently no jobs in the Submitted or Running state" in str(res['payload']['message']):
+                                        return {"status": "success", "payload": {"message": "There are currently no jobs running at the " + str(targetName) + " Target at this time.", "cert": str(cert)}}
+                                    else:
+                                        return {"status": "success", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
                 except Exception as e:
-                    # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to send back the status that we have in the DB.
-                    values = ccqHubMethods.formatCcqstatOutput([job])
-                    if values['status'] == "success":
-                        return {"status": "success", "payload": {"message": str(values['payload']), "cert": str(cert)}}
-            return {"status": "error", "payload": "Unable to find the job in the database. Please check the job Id and try again."}
+                    # We encountered an unexpected exception
+                    print ''.join(traceback.format_exc(e))
+        return {"status": "error", "payload": {"message": "Unable to successfully get the status of the job(s) specified. Please re-check the credentials and try again.", "cert": str(cert)}}
 
     # If they don't want the verbose status, we just get the status out of the DB, format it and return it.
     else:
@@ -197,7 +218,6 @@ def ccqHubdel():
     if results['status'] != "success":
         return {"status": "error", "payload": {"message": str(results['payload']), "cert": str(None)}}
     else:
-        targetAddresses = []
         results = results['payload']
         if len(results) == 0:
             return {"status": "success", "payload": {"message": "The requested job id does not exist. Please check the job id and try again.", "cert": str(cert)}}
@@ -240,7 +260,7 @@ def ccqHubdel():
                                                 print res['payload']['message'] + "\n\n"
                                             elif res['status'] == "success":
                                                 submittedSuccessfully = True
-                                                return {"status": "success", "payload": "Successfully submitted the job to the scheduler"}
+                                                return {"status": "success", "payload": {"message": "Successfully submitted the job to the scheduler", "cert": str(cert)}}
                             except Exception as e:
                                 # We encountered an unexpected exception
                                 print ''.join(traceback.format_exc(e))
@@ -250,10 +270,12 @@ def ccqHubdel():
                     values = ccqHubMethods.updateJobInDB({"status": "Deleting"}, jobId)
                     if values['status'] == "success":
                         return {"status": "success", "payload": {"message": str(values['payload']), "cert": str(cert)}}
-                return {"status": "error", "payload": "Unable to find the job in the database. Please check the job Id and try again."}
+                return {"status": "error", "payload": {"message": "Unable to find the job in the database. Please check the job Id and try again.", "cert": str(cert)}}
             except Exception as e:
                 # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to delete the job before it is processed.
                 ccqHubMethods.updateJobInDB({"status": "Deleting"}, jobId)
+                return {"status": "error", "payload": {"message": "The job has been successfully deleted.", "cert": str(cert)}}
+        return {"status": "error", "payload": {"message": "Unable to find the job in the database. Please check the job Id and try again.", "cert": str(cert)}}
 
 
 @route('/ccqHubSub', method='POST')

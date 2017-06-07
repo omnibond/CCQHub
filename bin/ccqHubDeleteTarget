@@ -65,7 +65,7 @@ def main():
                     # Now that we have the object we need to delete it.
                     schedType = None
                     for item in results:
-                        schedType = item['schedType']
+                        schedType = item['schedulerType']
                         res = ccqHubMethods.handleObj("delete", item)
                         if res['status'] != "success":
                             print res['payload']
