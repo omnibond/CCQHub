@@ -45,7 +45,7 @@ THe initial work will be to develop an on premise database and surrounding secur
    - you can list these by running ccqHubListIdentities -v 
    - when a user runs ccqsub (mentioned later) in PAM mode an identity is automatically created for the user in ccqHub and associated by username to the PAM identity.   To use these identities in ccq in cloudycluster you will need to create the users there using the ccUserAdd (so file permissions and UIDs match).
    - to add an additional identity to ccqHub (for special permissions) run ccqHubAddIdentity
-   
- - Now you can submit/monitor jobs through ccqsub, ccqdel, ccqstat commands
-   - 
+ 
+# Operation
+Now you can submit/monitor jobs through ccqsub, ccqdel, ccqstat commands
   
