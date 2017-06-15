@@ -131,12 +131,12 @@ def ccqsub():
     if response['status'] == "success":
         results = response['payload']
         if len(results) == 0:
-            print "You have not configured any Targets yet, in order to submit jobs through ccqsub you must first configure a Target. This can be done by using the ccqHubAddTarget utility. Please create a Target and try submitting your job again."
+            print("You have not configured any Targets yet, in order to submit jobs through ccqsub you must first configure a Target. This can be done by using the ccqHubAddTarget utility. Please create a Target and try submitting your job again.")
             sys.exit(0)
 
     values = credentials.validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName, additionalActionsAndPermissionsRequired, bypassRemoteUserCheck)
     if values['status'] != "success":
-        print values['payload']
+        print(values['payload'])
         sys.exit(0)
     else:
         userName = values['payload']['userName']
@@ -146,7 +146,7 @@ def ccqsub():
 
     values = ccqHubMethods.readSubmitHostOutOfConfigFile()
     if values['status'] != "success":
-        print values['payload']
+        print(values['payload'])
         sys.exit(0)
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
@@ -161,7 +161,7 @@ def ccqsub():
             jobName = splitJobScriptLocation[len(splitJobScriptLocation)-1]
 
     else:
-        print "In this version of ccqsub you must submit a job script using the -js argument in order to submit a job. Please create a job script and submit your job again.\n"
+        print("In this version of ccqsub you must submit a job script using the -js argument in order to submit a job. Please create a job script and submit your job again.\n")
         sys.exit(0)
 
     jobScriptText = ""
@@ -241,11 +241,11 @@ def ccqsub():
                 #     ccOptionsParsed['schedType'] = "SGE"
                 #     schedType = "SGE"
                 else:
-                    print "\nCannot determine the type of scheduler/target to submit this job to. Please re-submit the job and specify the scheduler/target you want to submit to using the -s directive in your job script or via the command line. You may also specify the type of job (Torque, SGE, SLURM, Condor, PBSPro) using the -st directive in your job script or via command line arguments.\n"
+                    print("\nCannot determine the type of scheduler/target to submit this job to. Please re-submit the job and specify the scheduler/target you want to submit to using the -s directive in your job script or via the command line. You may also specify the type of job (Torque, SGE, SLURM, Condor, PBSPro) using the -st directive in your job script or via command line arguments.\n")
                     sys.exit(0)
 
         except IOError as e:
-            print "The job script file that was specified (" + str(jobScriptLocation) + ") does not exist. Please check the file path and try again.\n"
+            print("The job script file that was specified (" + str(jobScriptLocation) + ") does not exist. Please check the file path and try again.\n")
             sys.exit(0)
 
         #See if the user wanted a specific instance type. If they did then we only use that instance type, if not ccq can choose what to use
@@ -266,8 +266,8 @@ def ccqsub():
 
     values = generateJobMD5Hash(jobScriptText)
     if values['status'] != 'success':
-        print values['payload']
-        print "\n"
+        print(values['payload'])
+        print("\n")
         sys.exit(0)
     else:
         jobMD5Hash = values['payload']['md5']
@@ -290,17 +290,17 @@ def ccqsub():
         res = json.loads(res)
         if res['status'] == "failure":
             if not isCert and ccAccessKey is None:
-                print str(res['payload']['message']) + "\n\n"
+                print(str(res['payload']['message']) + "\n\n")
                 attempts += 1
             elif ccAccessKey is not None:
-                print "The key is not valid, please check your key and try again."
+                print("The key is not valid, please check your key and try again.")
                 sys.exit(0)
             else:
                 isCert = False
                 ccAccessKey = None
         elif res['status'] == "error":
             #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-            print res['payload']['message'] + "\n\n"
+            print(res['payload']['message'] + "\n\n")
 
             #We still logged in successfully so generate a new cert
             if valKey == "unpw" and res['payload']['cert'] is not None and str(res['payload']['cert']) != str("None"):
@@ -309,12 +309,12 @@ def ccqsub():
                     newCcqCertFile = open(ccqCertDefaultFileLocation, "w")
                     newCcqCertFile.write(json.dumps(certResponse))
                     newCcqCertFile.close()
-                    print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s).\n"
+                    print("Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s).\n")
                 else:
-                    print str(certResponse['error'])
+                    print(str(certResponse['error']))
             sys.exit(0)
         else:
-            print res['payload']['message'] + "\n\n"
+            print(res['payload']['message'] + "\n\n")
             validUser = True
             if valKey == "unpw" and res['payload']['cert'] is not None and str(res['payload']['cert']) != str("None"):
                 certResponse = json.loads(res['payload']['cert'].replace("'", '"'))
@@ -322,13 +322,13 @@ def ccqsub():
                     newCcqCertFile = open(ccqCertDefaultFileLocation, "w")
                     newCcqCertFile.write(json.dumps(certResponse))
                     newCcqCertFile.close()
-                    print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)."
+                    print("Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s).")
                 else:
-                    print str(certResponse['error'])
+                    print(str(certResponse['error']))
 
     except Exception as ex:
-        print traceback.format_exc(ex)
-        print "\n"
+        print(traceback.format_exc(ex))
+        print("\n")
         sys.exit(0)
 
 
@@ -339,19 +339,19 @@ def validateSpotInstanceParameters(ccOptionsParsed):
             try:
                 tempFloat = float(ccOptionsParsed["spotPrice"])
                 if tempFloat <= 0:
-                    print "You must specify a spot price greater than 0.\n"
+                    print("You must specify a spot price greater than 0.\n")
                     sys.exit(0)
                 else:
                     ccOptionsParsed["spotPrice"] = "{:1.222f}".format(tempFloat)
             except:
-                print "The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n"
+                print("The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
                 sys.exit(0)
         else:
-            print "If you specify the use of spot instances you must specify a target spot price and an instance type.\n"
+            print("If you specify the use of spot instances you must specify a target spot price and an instance type.\n")
             sys.exit(0)
 
         if str(ccOptionsParsed["requestedInstanceType"]).lower() == "default":
-            print "If you specify the use of spot instances you must specify a specific instance type.\n"
+            print("If you specify the use of spot instances you must specify a specific instance type.\n")
             sys.exit(0)
 
 
@@ -359,45 +359,45 @@ def validateInstanceParameters(ccOptionsParsed):
     try:
         tempCPUs = int(ccOptionsParsed["numCpusRequested"])
         if tempCPUs <= 0:
-            print "Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n"
+            print("Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n")
             sys.exit(0)
     except:
-        print "Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n"
+        print("Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n")
         sys.exit(0)
     try:
         tempMemory = int(ccOptionsParsed["memoryRequested"])
         if tempMemory <= 0:
-            print "Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n"
+            print("Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n")
             sys.exit(0)
     except:
-        print "Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n"
+        print("Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n")
         sys.exit(0)
     try:
         tempNumInstances = int(ccOptionsParsed["numberOfInstancesRequested"])
         if tempNumInstances <= 0:
-            print "Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n"
+            print("Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n")
             sys.exit(0)
     except:
-        print "Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n"
+        print("Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n")
         sys.exit(0)
 
     try:
         tempcertLength = int(ccOptionsParsed["certLength"])
         if tempcertLength < 0:
-            print "Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n"
+            print("Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n")
             sys.exit(0)
     except:
-        print "Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n"
+        print("Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n")
         sys.exit(0)
 
     if ccOptionsParsed["optimizationChoice"] != "cost" and ccOptionsParsed["optimizationChoice"] != "performance":
-        print "Invalid optimization choice specified. The valid optimization choices are \"cost\" or \"performance\".\n"
+        print("Invalid optimization choice specified. The valid optimization choices are \"cost\" or \"performance\".\n")
         sys.exit(0)
     if ccOptionsParsed["criteriaPriority"] != "mcn" and ccOptionsParsed["criteriaPriority"] != "mnc" and ccOptionsParsed["criteriaPriority"] != "cmn" and ccOptionsParsed["criteriaPriority"] != "cnm" and ccOptionsParsed["criteriaPriority"] != "ncm" and ccOptionsParsed["criteriaPriority"] != "nmc":
-        print "Invalid criteria priority specified. The valid criteria priority are: mcn, mnc, cmn, cnm, ncm, or nmc.\n"
+        print("Invalid criteria priority specified. The valid criteria priority are: mcn, mnc, cmn, cnm, ncm, or nmc.\n")
         sys.exit(0)
     if ccOptionsParsed["networkTypeRequested"] != "low" and ccOptionsParsed["networkTypeRequested"] != "moderate" and ccOptionsParsed["networkTypeRequested"] != "high" and ccOptionsParsed["networkTypeRequested"] != "10 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "default" and ccOptionsParsed["networkTypeRequested"] != "20 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "up to 10 gigabit":
-        print "Invalid network type specified. The valid network types are: low, moderate, high, 10 Gigabit, or 20 Gigabit.\n"
+        print("Invalid network type specified. The valid network types are: low, moderate, high, 10 Gigabit, or 20 Gigabit.\n")
         sys.exit(0)
 
 

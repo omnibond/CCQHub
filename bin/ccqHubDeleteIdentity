@@ -42,10 +42,10 @@ def loopAndDelete(listToLoopThrough, listType):
                 # Delete it now since we found it.
                 res = ccqHubMethods.handleObj("delete", thing)
                 if res['status'] != "success":
-                    print "There was a problem deleting the Identity with the attribute" + str(item) + " from ccqHub."
-                    print res['payload']
+                    print("There was a problem deleting the Identity with the attribute" + str(item) + " from ccqHub.")
+                    print(res['payload'])
                 else:
-                    print "Successfully deleted the Identity with the attribute " + str(item) + " from ccqHub."
+                    print("Successfully deleted the Identity with the attribute " + str(item) + " from ccqHub.")
 
 def main():
     parser = argparse.ArgumentParser(description="A ccqHub utility that allows an administrator to delete an identity from ccqHub.")
@@ -78,15 +78,15 @@ def main():
         keyIds = keyIds.replace(" ", "").split(",")
 
     if identityUuids is None and userNames is None and keyIds is None:
-        print "In order to delete an Identity you must specify either the IdentityUuid, a user associated with the identity to be deleted, or the key id of a key associated with the Identity to be deleted. Please specify one of these and try again."
+        print("In order to delete an Identity you must specify either the IdentityUuid, a user associated with the identity to be deleted, or the key id of a key associated with the Identity to be deleted. Please specify one of these and try again.")
         sys.exit(0)
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -95,7 +95,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             # Do stuff to delete existing identity
@@ -106,7 +106,7 @@ def main():
             if userNames is not None:
                 loopAndDelete(userNames, "userName")
     except Exception as e:
-        print "ccqHubDeleteIdentity encountered an unexpected error."
-        print traceback.format_exc(e)
+        print("ccqHubDeleteIdentity encountered an unexpected error.")
+        print(traceback.format_exc(e))
 
 main()

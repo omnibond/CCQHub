@@ -98,45 +98,45 @@ def ccqstat():
                 targetNames.append(name['targetName'])
 
             if len(targetNames) == 0:
-                print "You must create a Target before you can check the status of the jobs running. You can create a Target through the ccqHubAddTarget utility."
+                print("You must create a Target before you can check the status of the jobs running. You can create a Target through the ccqHubAddTarget utility.")
                 sys.exit(0)
             else:
-                print "In order to display the verbose status for all jobs you must specify a Target. \nThe possible Targets are:"
+                print("In order to display the verbose status for all jobs you must specify a Target. \nThe possible Targets are:")
                 for item in targetNames:
-                    print item
+                    print(item)
                 validTargetNameEntered = False
                 attempts = 0
-                print "\n"
+                print("\n")
                 while not validTargetNameEntered and attempts < 5:
                     userInput = raw_input("Please enter one of the Targets listed above:\n")
                     if str(userInput) not in targetNames:
-                        print "\nInvalid Target name specified."
+                        print("\nInvalid Target name specified.")
                         attempts += 1
                     else:
-                        print "\n\n"
+                        print("\n\n")
                         validTargetNameEntered = True
                         attempts = 6
                         targetName = userInput
 
                 if not validTargetNameEntered:
-                    print "Maximum number of tries reached. Please try again."
+                    print("Maximum number of tries reached. Please try again.")
                     sys.exit(0)
         else:
-            print "Unable to retrieve the Target names from the Database. Please try again."
+            print("Unable to retrieve the Target names from the Database. Please try again.")
             sys.exit(0)
 
     jobInformation = {}
 
     values = ccqHubMethods.readSubmitHostOutOfConfigFile()
     if values['status'] != "success":
-        print values['payload']
+        print(values['payload'])
         sys.exit(0)
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
     values = credentials.validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName, additionalActionsAndPermissionsRequired, bypassRemoteUserCheck)
     if values['status'] != "success":
-        print values['payload']
+        print(values['payload'])
         sys.exit(0)
     else:
         userName = values['payload']['userName']
@@ -162,20 +162,20 @@ def ccqstat():
         res = json.loads(res)
         if res['status'] == "failure":
             if not isCert and ccAccessKey is None:
-                print str(res['payload']['message']) + "\n\n"
+                print(str(res['payload']['message']) + "\n\n")
                 attempts += 1
             elif ccAccessKey is not None:
-                print "The key is not valid, please check your key and try again."
+                print("The key is not valid, please check your key and try again.")
                 sys.exit(0)
             else:
                 isCert = False
                 ccAccessKey = None
         elif res['status'] == "error":
             #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-            print res['payload']['message'] + "\n\n"
+            print(res['payload']['message'] + "\n\n")
             sys.exit(0)
         else:
-            print res['payload']['message'] + "\n\n"
+            print(res['payload']['message'] + "\n\n")
             validUser = True
             if valKey == "unpw" and res['payload']['cert'] is not None and str(res['payload']['cert']) != str("None"):
                 certResponse = json.loads(res['payload']['cert'].replace("'", '"'))
@@ -183,13 +183,13 @@ def ccqstat():
                     newCcqCertFile = open(ccqCertDefaultFileLocation, "w")
                     newCcqCertFile.write(json.dumps(certResponse))
                     newCcqCertFile.close()
-                    print "Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s)."
+                    print("Successfully generated a new ccq certificate file that will expire in " + str(certLength) + " day(s).")
                 else:
-                    print str(certResponse['error'])
+                    print(str(certResponse['error']))
 
     except Exception as ex:
-        print traceback.format_exc(ex)
-        print "\n"
+        print(traceback.format_exc(ex))
+        print("\n")
         sys.exit(0)
     sys.exit(0)
 

@@ -36,8 +36,8 @@ def checkTargetNameUniqueness(targetName):
         else:
             return True
     else:
-        print "Unable to verify target name uniqueness, please try again later."
-        print response['payload']
+        print("Unable to verify target name uniqueness, please try again later.")
+        print(response['payload'])
         sys.exit(0)
 
 
@@ -72,15 +72,15 @@ def main():
 
     if schedType is not None:
         if ccqSchedulersAndTypes is not None and schedType != "ccq":
-            print "The -cs argument can only be used when adding a ccq target. Please change the type of the target being added or remove the -cs argument."
+            print("The -cs argument can only be used when adding a ccq target. Please change the type of the target being added or remove the -cs argument.")
             sys.exit(0)
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -89,7 +89,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             # Walk through for the user to be able to interactively add a ccqHub Target, if arguments are supplied on the commandline then this is skipped
@@ -100,11 +100,11 @@ def main():
                     targetName = ccqHubMethods.getInput("target name", "a logical name for scheduler that is being configured. If using ccqHub with CloudyCluster backed schedulers, this name should match the name of the Scheduler Instance within CloudyCluster you are attempting to configure", None, ["myScheduler", "ccqCloudScheduler"])
                     if not checkTargetNameUniqueness(targetName):
                         attempts += 1
-                        print "\n The target name (" + str(targetName) + ") is already configured in this ccqHub installation. Please choose a new target name or use the ccqHubModifyTarget command to modify the existing target."
+                        print("\n The target name (" + str(targetName) + ") is already configured in this ccqHub installation. Please choose a new target name or use the ccqHubModifyTarget command to modify the existing target.")
                     else:
                         done = True
                 if not done:
-                    print "Maximum number of input tries exceeded for target name. Please try again."
+                    print("Maximum number of input tries exceeded for target name. Please try again.")
                     sys.exit(0)
 
             if schedType is None:
@@ -112,7 +112,7 @@ def main():
 
             if targetAddress is None:
                 if schedType == "ccq":
-                    print "\nccq schedulers require that the target address be the address of the Login Instance and NOT the instance of the scheduler itself."
+                    print("\nccq schedulers require that the target address be the address of the Login Instance and NOT the instance of the scheduler itself.")
                     targetAddress = ccqHubMethods.getInput("target address", "the publicly routable DNS name/IP addresses where the target can be reached", None, ["example.johndoe.com", "176.32.0.1", "10.2.5.6, example.janedoe.com"])
 
             if protocol is None:
@@ -135,7 +135,7 @@ def main():
                         #     proxyKey = ccqHubMethods.getInput("authorization identifier", "the identifier used by the authorization mode at specified target to authenticate the ccqHub job submission", None, ["john", "jdoe34"])
                         else:
                             attempts += 1
-                            print "The auth types ssh and username will be supported in a future ccqHub release. Currently the only supported authorization mode is appkey."
+                            print("The auth types ssh and username will be supported in a future ccqHub release. Currently the only supported authorization mode is appkey.")
                             sys.exit(0)
                     else:
                         # Currently only ccq schedulers require a proxy key attribute if the type isn't ccq then skip it for now
@@ -143,7 +143,7 @@ def main():
                         pass
 
                 if not done:
-                    print "Maximum number of input tries exceeded for authorization identifier. Please try again."
+                    print("Maximum number of input tries exceeded for authorization identifier. Please try again.")
                     sys.exit(0)
 
             if hubDefault is None:
@@ -154,7 +154,7 @@ def main():
                 ccqSchedulersAndTypes = ccqHubMethods.getInput("list of internal scheduler names and types provided by this ccq target", "the scheduler names and types that are available for use through the ccq target being set up. This could be a single scheduler and type or a comma seperated list of scheduler names and types", None, ["myScheduler:torque", "mySlurmScheduler:slurm", "mySlurmScheduler:slurm, myScheduler:torque"])
 
             if not checkTargetNameUniqueness(targetName):
-                print "\n The target name (" + str(targetName) + ") is already configured in this ccqHub installation. Please choose a new target name or use the ccqHubModifyTarget command to modify the existing target."
+                print("\n The target name (" + str(targetName) + ") is already configured in this ccqHub installation. Please choose a new target name or use the ccqHubModifyTarget command to modify the existing target.")
                 sys.exit(0)
 
             # Local scheduler submission doesn't require a proxy key so we make it an empty list
@@ -178,13 +178,13 @@ def main():
                 for schedAndType in tempList:
                     splitItem = schedAndType.replace(" ", "").split(":")
                     if len(splitItem) != 2:
-                        print "Malformed list of internal scheduler names and types provided. The format is <scheduler_name>:<scheduler_type>,<scheduler_name>:<scheduler_type>. Please check the list provided and try again."
+                        print("Malformed list of internal scheduler names and types provided. The format is <scheduler_name>:<scheduler_type>,<scheduler_name>:<scheduler_type>. Please check the list provided and try again.")
                         sys.exit(0)
                     if str(splitItem[1]) not in ccqHubMethods.ccqHubSupportedSchedulerTypes:
                         output = "Invalid scheduler type provided for the ccq target schedulers/types. The supported scheduler types are: "
                         for schedTypeSupported in ccqHubMethods.ccqHubSupportedSchedulerTypes:
                             output += str(schedTypeSupported) + ", "
-                        print str(output[:len(output)-2]) + ". Please check the list provided and try again."
+                        print(str(output[:len(output)-2]) + ". Please check the list provided and try again.")
                         sys.exit(0)
                     else:
                         ccqSchedulersAndTypes[str(splitItem[0]).replace(" ", "")] = str(splitItem[1]).replace(" ", "")
@@ -194,7 +194,7 @@ def main():
             obj = {"RecType": "Target", "name": str(uuid.uuid4()), "targetName": str(targetName), "targetAddress": targetAddress, "protocol": str(protocol), "schedulerType": str(schedType), "authType": str(auth), "proxyKey": proxyKey, "ccqSchedulersAndTypes": ccqSchedulersAndTypes}
             res = ccqHubMethods.handleObj("create", obj)
             if res['status'] != "success":
-                print res['payload']
+                print(res['payload'])
                 sys.exit(0)
             else:
                 # If specified, the defaultTargets object needs to be updated for the scheduler type.
@@ -209,15 +209,15 @@ def main():
                             item['defaultSchedulers'] = defaultSchedulers
                             res = ccqHubMethods.handleObj("modify", item)
                             if res['status'] != "success":
-                                print "There was an error encountered when trying to update the DefaultTargets.\n"
-                                print res['payload']
+                                print("There was an error encountered when trying to update the DefaultTargets.\n")
+                                print(res['payload'])
                                 sys.exit(0)
-                print "Successfully added the target to ccqHub you may now submit jobs to this target through ccqHub using the target name or address."
+                print("Successfully added the target to ccqHub you may now submit jobs to this target through ccqHub using the target name or address.")
                 sys.exit(0)
 
     except Exception as e:
-        print "ccqHubAddTarget encountered an unexpected exception."
-        print traceback.format_exc(e)
+        print("ccqHubAddTarget encountered an unexpected exception.")
+        print(traceback.format_exc(e))
         sys.exit(0)
 
 main()

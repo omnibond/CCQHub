@@ -63,7 +63,7 @@ def main():
             return {"status": "error", "payload": res['payload']}
         else:
             for id in res['payload']:
-                print "The username: " + str(user) + " is already associated with another ccqHub Identity. If you wish to create a new Identity for " + str(user) + " please use the ccqHubModifyIdentity utility to remove " + str(user) + " from the other Identity."
+                print("The username: " + str(user) + " is already associated with another ccqHub Identity. If you wish to create a new Identity for " + str(user) + " please use the ccqHubModifyIdentity utility to remove " + str(user) + " from the other Identity.")
                 sys.exit(0)
 
     # None of the userNames being added to the new Identity are in an existing Identity
@@ -71,8 +71,8 @@ def main():
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -81,13 +81,13 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             # Do stuff to add new identity
             results = ccqHubMethods.createIdentity(actions, userNames, genKey)
             if results['status'] != "success":
-                print values['payload']
+                print(values['payload'])
                 sys.exit(0)
             else:
                 generatedKey = results['payload']['generatedKey']
@@ -104,11 +104,11 @@ def main():
                         generatedKeyFile.write(str(generatedKey))
                         generatedKeyFile.close()
                         os.system("chmod 400 " + str(os.getcwdu()) + str(keyName))
-                        print "Successfully generated a key file for the newly created Identity. The newly created key file is located at: " + str(os.getcwdu()) + str(keyName)
+                        print("Successfully generated a key file for the newly created Identity. The newly created key file is located at: " + str(os.getcwdu()) + str(keyName))
                         sys.exit(0)
                     except Exception as e:
-                        print "Unable to write out the generated key to a file."
-                        print "You can manually create a key file, just copy and paste the generated key into a file of your choice. This will be the file that is passed to the ccqHub utilities to verify your Identity. The generated key is: " + str(generatedKey)
+                        print("Unable to write out the generated key to a file.")
+                        print("You can manually create a key file, just copy and paste the generated key into a file of your choice. This will be the file that is passed to the ccqHub utilities to verify your Identity. The generated key is: " + str(generatedKey))
                         sys.exit(0)
 
             # TODO in the future we may add ways to limit which resources ccqHub identities can submit to
@@ -133,8 +133,8 @@ def main():
             #         print "Invalid target names were specified. Please check the names of the targets and try again."
             #         sys.exit(0)
     except Exception as e:
-        print "ccqHubAddIdentity encountered an unexpected error."
-        print traceback.format_exc(e)
+        print("ccqHubAddIdentity encountered an unexpected error.")
+        print(traceback.format_exc(e))
         sys.exit(0)
 
 main()

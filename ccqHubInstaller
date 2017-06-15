@@ -70,28 +70,28 @@ def main():
     if not nonRoot:
         values = credentials.checkAdminRights()
         if values['status'] != "success":
-            print "You are not running with root permissions. It is advised that ccqHub be installed with root permissions in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub."
+            print("You are not running with root permissions. It is advised that ccqHub be installed with root permissions in order to protect the ccqHub data and the accounts linked to it. If you are willing to accept these risks please pass the -nr argument to ccqHub.")
             sys.exit(0)
         if prefix is None:
             prefix = defaultPrefix
     else:
         if prefix is None:
-            print "You must specify a prefix when installing ccqHub in non-root mode. Please try again and specify a prefix using the -p argument."
+            print("You must specify a prefix when installing ccqHub in non-root mode. Please try again and specify a prefix using the -p argument.")
             sys.exit(0)
 
     # Check to see if the ccqHub directory exists or not, if it does not create it.
     if not os.path.isdir(str(prefix)):
-        print "Prefix directory not found, attempting to create the directory " + str(prefix) + " now."
+        print("Prefix directory not found, attempting to create the directory " + str(prefix) + " now.")
         status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var")
         if int(status) != 0:
             # Creation of the directory failed print the output and exit
-            print "There was an error trying to create the installation directories. The error message is: " + str(output)
+            print("There was an error trying to create the installation directories. The error message is: " + str(output))
             sys.exit(0)
         else:
-            print "Successfully created the new ccqHub directory: " + str(prefix)
+            print("Successfully created the new ccqHub directory: " + str(prefix))
     else:
-        print "The prefix directory specified already exists, if you continue this will replace the current ccqHub installation and the old data will be deleted (if you have permission to do so)."
-        print "Continue (y or n)?"
+        print("The prefix directory specified already exists, if you continue this will replace the current ccqHub installation and the old data will be deleted (if you have permission to do so).")
+        print("Continue (y or n)?")
         completed = False
         continueChoice = ""
         while not completed:
@@ -99,7 +99,7 @@ def main():
             if continueChoice == "y" or continueChoice == "n":
                 completed = True
             else:
-                print "Please enter y for yes and n for no:"
+                print("Please enter y for yes and n for no:")
 
         if continueChoice == "n":
             sys.exit()
@@ -107,33 +107,33 @@ def main():
             status, output = commands.getstatusoutput("rm -rf " + str(prefix))
             if int(status) != 0:
                 # Creation of the directory failed print the output and exit
-                print "There was an error remove the old ccqHub directory. The error message is: " + str(output)
+                print("There was an error remove the old ccqHub directory. The error message is: " + str(output))
                 sys.exit(0)
             else:
                 status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var " + str(prefix) + "/logs")
                 if int(status) != 0:
                     # Creation of the directory failed print the output and exit
-                    print "There was an error trying to create the directory. The error message is: " + str(output)
+                    print("There was an error trying to create the directory. The error message is: " + str(output))
                     sys.exit(0)
 
     # Install ccqHub to the specified directory:
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
     secondStatus, secondOutput = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
     thirdStatus, thirdOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
-    print str(prefix) + "/bin/*"
+    #print(str(prefix) + "/bin/*")
     if int(status) != 0 or int(secondStatus) != 0 or int(thirdStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
-            print "The ccqHub installation failed. The error message is: " + str(output)
+            print("The ccqHub installation failed. The error message is: " + str(output))
             sys.exit(0)
         elif int(secondStatus) != 0:
-            print "The ccqHub installation failed. The error message is: " + str(secondOutput)
+            print("The ccqHub installation failed. The error message is: " + str(secondOutput))
             sys.exit(0)
         elif int(thirdStatus) != 0:
-            print "The ccqHub installation failed. The error message is: " + str(thirdOutput)
+            print("The ccqHub installation failed. The error message is: " + str(thirdOutput))
             sys.exit(0)
     else:
-        print "Successfully installed ccqHub to the directory: " + str(prefix)
+        print("Successfully installed ccqHub to the directory: " + str(prefix))
 
     # Add new binaries to the PATH so that you can invoke them from the commandline
     if addToPath == "yes":
@@ -141,12 +141,12 @@ def main():
             if not nonRoot:
                 status, output = commands.getstatusoutput("echo \"export PATH=\$PATH:" + str(prefix) + "/bin\" > /etc/profile.d/ccqHub.sh")
                 if int(status) != 0:
-                    print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output)
+                    print("The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output))
                     sys.exit(0)
             else:
                 status, output = commands.getstatusoutput("echo \"export PATH=$PATH:" + str(prefix) + "/bin\" >> ~/.bash_profile")
                 if int(status) != 0:
-                    print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output)
+                    print("The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output))
                     sys.exit(0)
         elif sys.platform == "darwin":
             if not nonRoot:
@@ -154,19 +154,19 @@ def main():
                 secondStatus, secondOutput = commands.getstatusoutput("export PATH=$PATH:" + str(prefix) + "/bin")
                 if int(status) != 0 or int(secondStatus) != 0:
                     if int(status) != 0:
-                        print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output)
+                        print("The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(output))
                         sys.exit(0)
                     elif int(secondStatus) != 0:
-                        print "The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(secondOutput)
+                        print("The ccqHub installer failed to add the binaries to the PATH. The error message is: " + str(secondOutput))
                         sys.exit(0)
         elif sys.platform == "win32":
             #TODO figure out how to add to the PATH variable on Windows or make this work on Windows
-            print "Adding to the PATH on Windows is not yet supported."
+            print("Adding to the PATH on Windows is not yet supported.")
 
     #Create the Databases for ccqHub to use
     tableNameResults = ccqHubMethods.generateTableNames()
     if tableNameResults['status'] != "success":
-        print tableNameResults['payload']
+        print(tableNameResults['payload'])
     else:
         lookupTableName = tableNameResults['payload']['lookupTableName']
         objectTableName = tableNameResults['payload']['objectTableName']
@@ -201,31 +201,31 @@ def main():
 
         lookupTableCreationResults = ccqHubMethods.createTable(lookupTableName)
         if lookupTableCreationResults['status'] != "success":
-            print lookupTableCreationResults['payload']
+            print(lookupTableCreationResults['payload'])
             sys.exit(0)
         objectTableCreationResults = ccqHubMethods.createTable(objectTableName)
         if objectTableCreationResults['status'] != "success":
-            print objectTableCreationResults['payload']
+            print(objectTableCreationResults['payload'])
             sys.exit(0)
 
     # Need to save out the defaultTarget object
     results = ccqHubMethods.createDefaultTargetsObject()
     if results['status'] != "success":
-        print results['payload']
+        print(results['payload'])
         sys.exit(0)
 
-    print "Generating an encryption key for the ccqHub installation."
+    print("Generating an encryption key for the ccqHub installation.")
     values = ccqHubMethods.generateEncryptionKey()
     if values['status'] != "success":
-        print values['payload']['error']
-        print values['payload']['traceback']
+        print(values['payload']['error'])
+        print(values['payload']['traceback'])
     else:
         # Need to generate an API key that must be used in order to perform ccqHub management functions
         permissions = ["ccqHubAdmin"]
         values = ccqHubMethods.createIdentity(permissions, [], True)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory
@@ -239,8 +239,8 @@ def main():
             permissions = ["submitJob", "proxyUser", "listAllUserJobs"]
             values = ccqHubMethods.createIdentity(permissions, [], True)
             if values['status'] != "success":
-                print values['payload']['error']
-                print values['payload']['traceback']
+                print(values['payload']['error'])
+                print(values['payload']['traceback'])
                 sys.exit(0)
             else:
                 # Need to write out the API key to a file that can be accessed only by the user. This key file will be generated in the {{prefix}}/.keys directory

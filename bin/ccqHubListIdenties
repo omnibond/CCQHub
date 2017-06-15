@@ -53,8 +53,8 @@ def main():
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -63,7 +63,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             notFoundMessage = "There are no Identities to display."
@@ -102,21 +102,21 @@ def main():
                         identitiesToDisplay[id['name']] = id
                 notFoundMessage = "Unable to find an Identity associated with the keyId provided."
             else:
-                print "Unable to determine which Identities to print"
+                print("Unable to determine which Identities to print")
                 sys.exit(0)
 
             if len(identitiesToDisplay) == 0:
-                print notFoundMessage
+                print(notFoundMessage)
             else:
                 values = ccqHubMethods.formatOutputListIdentities(identitiesToDisplay, verbose)
                 if values['status'] != "success":
-                    print values['payload']
+                    print(values['payload'])
                     sys.exit(0)
                 else:
-                    print values['payload']
+                    print(values['payload'])
 
     except Exception as e:
-        print "ccqHubListIdentities encountered an unexpected error."
-        print traceback.format_exc(e)
+        print("ccqHubListIdentities encountered an unexpected error.")
+        print(traceback.format_exc(e))
 
 main()

@@ -100,8 +100,8 @@ def main():
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -109,7 +109,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             queryString = "RecType-Target-"
@@ -141,12 +141,12 @@ def main():
             response = ccqHubMethods.queryObj(None, queryString, "query", "json", "beginsWith")
             if response['status'] == "success":
                 results = response['payload']
-                print formatOutput(results, targetAddress)
+                print(formatOutput(results, targetAddress))
 
 
     except Exception as e:
-        print "ccqHubListTargets encountered an unexpected exception."
-        print traceback.format_exc(e)
+        print("ccqHubListTargets encountered an unexpected exception.")
+        print(traceback.format_exc(e))
         sys.exit(0)
 
 main()

@@ -69,28 +69,28 @@ def main():
     identity = None
 
     if identityUuid is None:
-        print "You must specify the Identity you wish to modify."
+        print("You must specify the Identity you wish to modify.")
         sys.exit(0)
 
     validActions = policies.getValidActionsAndRequiredAttributes()
     if attributesToDelete is not None:
         for attr in attributesToDelete.replace(" ", "").split(","):
             if attr not in validActions:
-                print "Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + "."
+                print("Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + ".")
                 sys.exit(0)
 
     if attributesToAdd is not None:
         for attr in attributesToAdd.replace(" ", "").split(","):
             if attr not in validActions:
-                print "Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + "."
+                print("Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + ".")
                 sys.exit(0)
 
     try:
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -99,7 +99,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             # Do stuff to modify an existing identity
@@ -113,7 +113,7 @@ def main():
                 for thing in res['payload']:
                     identity = thing
                 if identity is None:
-                    print "Unable to find the Identity specified. Please try again."
+                    print("Unable to find the Identity specified. Please try again.")
                     sys.exit(0)
                 else:
                     # If the user specifies userNames to delete, loop through them and remove them from the Identity
@@ -147,7 +147,7 @@ def main():
                                 sys.exit(0)
                             else:
                                 keyList = json.loads(decryptedKeyList['payload'])
-                                print keyList
+                                #print(keyList)
                                 for fullKey in keyList:
                                     if str(key) == str(fullKey)[:6]:
                                         keyList.remove(fullKey)
@@ -155,7 +155,7 @@ def main():
                         # We have to re-encrypt the keyInfo object before putting it back in the DB
                         encryptedKeyObj = ccqHubMethods.encryptString(keyList)
                         if encryptedKeyObj['status'] != "success":
-                            print encryptedKeyObj['payload']
+                            #print(encryptedKeyObj['payload'])
                             sys.exit(0)
                         else:
                             identity['keyInfo'] = encryptedKeyObj['payload']
@@ -215,17 +215,17 @@ def main():
                     # Save out the key to the DB, it has it's own object for storing key permissions and other information
                     res = ccqHubMethods.handleObj("modify", identity)
                     if res['status'] != "success":
-                        print res['payload']
+                        print(res['payload'])
                         sys.exit(0)
                     else:
-                        print "Successfully performed the modifications on the Identity object."
+                        print("Successfully performed the modifications on the Identity object.")
 
                     # If the User wants to generate a new key for the Identity do that here.
                     if generateKey:
-                        print "Now generating a new key for the Identity."
+                        print("Now generating a new key for the Identity.")
                         values = ccqHubMethods.saveAndGenNewIdentityKey(identityUuid, None)
                         if values['status'] != "success":
-                            print values['payload']
+                            print(values['payload'])
                             sys.exit(0)
                         else:
                             generatedKey = values['payload']
@@ -236,16 +236,17 @@ def main():
                                 generatedKeyFile.write(str(generatedKey))
                                 generatedKeyFile.close()
                                 os.system("chmod 400 " + str(os.getcwdu()) + str(keyName))
-                                print "Successfully generated a key file for the Identity. The newly created key file is located at: " + str(os.getcwdu()) + str(keyName)
+                                print("Successfully generated a key file for the Identity. The newly created key file is located at: " + str(os.getcwdu()) + str(keyName))
                                 sys.exit(0)
                             except Exception as e:
-                                print "Unable to write out the generated key to a file."
-                                print "You can manually create a key file, just copy and paste the generated key into a file of your choice. This will be the file that is passed to the ccqHub utilities to verify your Identity. The generated key is: " + str(generatedKey)
+                                print("Unable to write out the generated key to a file.")
+                                print("You can manually create a key file, just copy and paste the generated key into a file of your choice. This will be the file that is passed to the ccqHub utilities to verify your Identity. The generated key is: " + str(generatedKey))
                                 sys.exit(0)
         sys.exit(0)
     except Exception as e:
-        print "ccqHubModifyIdentity encountered an unexpected error."
-        print traceback.format_exc(e)
+        print("ccqHubModifyIdentity encountered an unexpected error.")
+        print(traceback.format_exc(e))
+        print(traceback.format_exc(e))
         sys.exit(0)
 
 main()

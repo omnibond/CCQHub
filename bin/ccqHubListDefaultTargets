@@ -76,8 +76,8 @@ def main():
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -86,7 +86,7 @@ def main():
         subject = {"subjectType": "key", "subject": key, "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             schedulerTypesToDisplay = {}
@@ -100,23 +100,23 @@ def main():
                             defaultSchedulers = json.loads(item['defaultSchedulers'])
                             schedulerTypesToDisplay[schedulerType] = str(defaultSchedulers[schedulerType])
                         except Exception as e:
-                            print "There was a problem trying to obtain the default Target for the " + str(schedulerType) + " scheduler type."
-                            print str(traceback.format_exc(e))
+                            print("There was a problem trying to obtain the default Target for the " + str(schedulerType) + " scheduler type.")
+                            print(str(traceback.format_exc(e)))
                             sys.exit(0)
                     else:
                         defaultSchedulers = json.loads(item['defaultSchedulers'])
                         for schedType in defaultSchedulers:
                             schedulerTypesToDisplay[schedType] = str(defaultSchedulers[schedType])
                 # Print the output
-                print formatOutput(schedulerTypesToDisplay)
+                print(formatOutput(schedulerTypesToDisplay))
                 sys.exit(0)
             else:
-                print "There was an error encountered when trying to list the default Targets.\n"
-                print response['payload']
+                print("There was an error encountered when trying to list the default Targets.\n")
+                print(response['payload'])
                 sys.exit(0)
 
     except Exception as e:
-        print "ccqHubListDefaultTargets encountered an unexpected error."
-        print traceback.format_exc(e)
+        print("ccqHubListDefaultTargets encountered an unexpected error.")
+        print(traceback.format_exc(e))
 
 main()

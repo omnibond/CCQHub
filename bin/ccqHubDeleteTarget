@@ -39,8 +39,8 @@ def main():
         # Validate that the user calling the command has access to the ccqHubAdminKey file
         values = credentials.validateCcqHubAdminKey(ccqHubAdminKeyPath)
         if values['status'] != "success":
-            print values['payload']['error']
-            print values['payload']['traceback']
+            print(values['payload']['error'])
+            print(values['payload']['traceback'])
             sys.exit(0)
         else:
             key = values['payload']
@@ -48,7 +48,7 @@ def main():
         subject = {"subjectType": "key", "subject": str(key), "subjectRecType": "Identity"}
         results = credentials.evaluatePermissions(subject, ["ccqHubAdmin"])
         if results['status'] != "success":
-            print results['payload']
+            print(results['payload'])
             sys.exit(0)
         else:
             # Walk through for the user to be able to interactively delete a ccqHub Target, if arguments are supplied on the commandline then this is skipped
@@ -59,7 +59,7 @@ def main():
             if response['status'] == "success":
                 results = response['payload']
                 if len(results) == 0:
-                    print "Unable to find the target (" + str(targetName) + ") in this installation of ccqHub. Please check the name and try again."
+                    print("Unable to find the target (" + str(targetName) + ") in this installation of ccqHub. Please check the name and try again.")
                     sys.exit(0)
                 else:
                     # Now that we have the object we need to delete it.
@@ -68,7 +68,7 @@ def main():
                         schedType = item['schedulerType']
                         res = ccqHubMethods.handleObj("delete", item)
                         if res['status'] != "success":
-                            print res['payload']
+                            print(res['payload'])
                             sys.exit(0)
                         else:
                             response = ccqHubMethods.queryObj(None, "DefaultTargets", "get", "json")
@@ -84,20 +84,18 @@ def main():
                                             item['defaultSchedulers'] = defaultSchedulers
                                             res = ccqHubMethods.handleObj("modify", item)
                                             if res['status'] != "success":
-                                                print "There was an error encountered when trying to update the DefaultTargets.\n"
-                                                print res['payload']
-                            print "Successfully deleted the target (" + str(targetName) + ") from ccqHub."
+                                                print("There was an error encountered when trying to update the DefaultTargets.\n")
+                                                print(res['payload'])
+                            print("Successfully deleted the target (" + str(targetName) + ") from ccqHub.")
                             sys.exit(0)
             else:
-                print "Unable to verify target name for deletion please try again later."
-                print response['payload']
+                print("Unable to verify target name for deletion please try again later.")
+                print(response['payload'])
                 sys.exit(0)
 
     except Exception as e:
-        print "ccqHubDeleteTarget encountered an unexpected exception."
-        print traceback.format_exc(e)
+        print("ccqHubDeleteTarget encountered an unexpected exception.")
+        print(traceback.format_exc(e))
         sys.exit(0)
 
 main()
-
-
