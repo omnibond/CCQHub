@@ -82,7 +82,7 @@ def main():
     # Check to see if the ccqHub directory exists or not, if it does not create it.
     if not os.path.isdir(str(prefix)):
         print "Prefix directory not found, attempting to create the directory " + str(prefix) + " now."
-        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var")
+        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var " + str(prefix) + "/logs")
         if int(status) != 0:
             # Creation of the directory failed print the output and exit
             print "There was an error trying to create the installation directories. The error message is: " + str(output)
