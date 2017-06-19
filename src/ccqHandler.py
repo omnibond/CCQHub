@@ -254,9 +254,21 @@ def cleanupDeletedJob(jobId):
     writeCcqVarsToFile()
 
 
+def monitorJobsAndInstances():
+    #Run for the duration of the ccqLauncher and monitor the jobs and instances for things that need deleted
+    while True:
+        try:
+            time.sleep(30)
+            print "The timestamp when start monitorJobs is: " + str(time.time())
+            monitorJobs()
+            print "The timestamp when end monitorJobs is: " + str(time.time())
+        except Exception as e:
+            print "There was an error encountered in monitorJobsAndInstances:\n"
+            print traceback.format_exc(e)
+
+
 def monitorJobs():
     #Get the jobs from the list of job mappings maintained by ccqLauncher
-    time.sleep(30)
     results = ccqHubMethods.queryObj(None, "RecType-Job-name-", "query", "dict", "beginsWith")
     if results['status'] == "success":
         jobsToCheck = results['payload']
@@ -270,13 +282,6 @@ def monitorJobs():
             print "NOW CHECKING JOB: " + str(job) + " at the start of monitor jobs\n"
             submittedToScheduler = False
 
-            remoteUserName = job['userName']
-
-            targetAddresses = json.loads(job["targetAddresses"])
-            targetProxyKeys = json.loads(job["targetProxyKeys"])
-            targetProtocol = job["targetProtocol"]
-            targetAuthType = job["targetAuthType"]
-
             try:
                 # Need to see if the job has been submitted to ccq in the cloud. If it has then we move on if it hasn't we return the non-verbose status and move on.
                 jobIdInCcq = job['jobIdInCcq']
@@ -286,6 +291,13 @@ def monitorJobs():
                 pass
 
             if submittedToScheduler:
+                remoteUserName = job['userName']
+
+                targetAddresses = json.loads(job["targetAddresses"])
+                targetProxyKeys = json.loads(job["targetProxyKeys"])
+                targetProtocol = job["targetProtocol"]
+                targetAuthType = job["targetAuthType"]
+
                 valKey = "unpw"
                 dateExpires = ""
                 encodedUserName = ""
@@ -460,7 +472,7 @@ def monitorJobs():
             #                         pass
             #                     print "The job " + str(job) + " was successfully deleted from the DB because it completed running over 1 day ago!"
     #We have added a new job to the queue so we need to retry
-    except RuntimeError as e:
+    except Exception as e:
         pass
 
 
@@ -740,7 +752,7 @@ def main():
         ccqHubVars.ccqHubFileLock = threading.RLock()
         ccqHubVars.ccqHubDBLock = threading.RLock()
 
-        ccqCleanupThread = threading.Thread(target=monitorJobs)
+        ccqCleanupThread = threading.Thread(target=monitorJobsAndInstances)
         ccqCleanupThread.start()
         #print "Successfully started the monitorJobsAndInstances thread to check and monitor the jobs."
 
@@ -755,9 +767,9 @@ def main():
                 ccqDelegateTasksThread.start()
             else:
                 print "The ccqDelegateTasksThread is running."
-            # if not ccqCleanupThread.is_alive:
-            #     print "UHOH WE DIED AT SOME POINT"
-            #     ccqCleanupThread.start()
-            # else:
-            #     print "The ccqCleanupThread is running."
+            if not ccqCleanupThread.is_alive:
+                print "UHOH WE DIED AT SOME POINT"
+                ccqCleanupThread.start()
+            else:
+                print "The ccqCleanupThread is running."
 main()

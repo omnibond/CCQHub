@@ -120,7 +120,6 @@ def main():
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
     secondStatus, secondOutput = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
     thirdStatus, thirdOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
-    print str(prefix) + "/bin/*"
     if int(status) != 0 or int(secondStatus) != 0 or int(thirdStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
@@ -253,11 +252,15 @@ def main():
         #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
         #TODO make this auto-start and make it a little more intelligent
         from subprocess import Popen
+        print "Starting the ccqHubWebServer that will receive the job submissions from the commandline utilities."
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
         Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile)
+        print "Successfully started the ccqHubWebServer."
 
-        ccqHubHandlerLogFile = open(str(prefix) + "/logs/ccqHubHandler.txt", "w")
-        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubHandler.py"], stderr=ccqHubHandlerLogFile, stdout=ccqHubHandlerLogFile)
+        print "Starting the ccqHandler process for processing the submitted jobs."
+        ccqHubHandlerLogFile = open(str(prefix) + "/logs/ccqHandler.txt", "w")
+        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHandler.py"], stderr=ccqHubHandlerLogFile, stdout=ccqHubHandlerLogFile)
+        print "Successfully started the ccqHandler process."
 
         # TODO cat out log file to make sure there aren't any errors
 
