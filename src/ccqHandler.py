@@ -237,7 +237,8 @@ def determineJobsToProcess(logger):
         return {'status': 'error', 'payload': results['payload']}
     for job in results:
         logger.info("This is the job[status] " + str(job['status']))
-        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'] != "Deleting" and job['status'] != "deleting" and str(job['isSubmitted']).lower() == "false":
+        print "This is the job[status] " + str(job['status'])
+        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'].lower() != "completed" and str(job['isSubmitted']).lower() == "false":
             jobSubmitTimes[job['name']] = job['dateSubmitted']
             jobs[job['name']] = job
 
@@ -255,9 +256,21 @@ def cleanupDeletedJob(jobId, logger):
     writeCcqVarsToFile()
 
 
+def monitorJobsAndInstances(logger):
+    #Run for the duration of the ccqLauncher and monitor the jobs and instances for things that need deleted
+    while True:
+        try:
+            time.sleep(30)
+            print "The timestamp when start monitorJobs is: " + str(time.time())
+            monitorJobs(logger)
+            print "The timestamp when end monitorJobs is: " + str(time.time())
+        except Exception as e:
+            print "There was an error encountered in monitorJobsAndInstances:\n"
+            print traceback.format_exc(e)
+
+
 def monitorJobs(logger):
     #Get the jobs from the list of job mappings maintained by ccqLauncher
-    time.sleep(30)
     results = ccqHubMethods.queryObj(None, "RecType-Job-name-", "query", "dict", "beginsWith")
     if results['status'] == "success":
         jobsToCheck = results['payload']
@@ -271,13 +284,6 @@ def monitorJobs(logger):
             logger.info("NOW CHECKING JOB: " + str(job) + " at the start of monitor jobs\n")
             submittedToScheduler = False
 
-            remoteUserName = job['userName']
-
-            targetAddresses = json.loads(job["targetAddresses"])
-            targetProxyKeys = json.loads(job["targetProxyKeys"])
-            targetProtocol = job["targetProtocol"]
-            targetAuthType = job["targetAuthType"]
-
             try:
                 # Need to see if the job has been submitted to ccq in the cloud. If it has then we move on if it hasn't we return the non-verbose status and move on.
                 jobIdInCcq = job['jobIdInCcq']
@@ -287,6 +293,13 @@ def monitorJobs(logger):
                 pass
 
             if submittedToScheduler:
+                remoteUserName = job['userName']
+
+                targetAddresses = json.loads(job["targetAddresses"])
+                targetProxyKeys = json.loads(job["targetProxyKeys"])
+                targetProtocol = job["targetProtocol"]
+                targetAuthType = job["targetAuthType"]
+
                 valKey = "unpw"
                 dateExpires = ""
                 encodedUserName = ""
@@ -332,6 +345,12 @@ def monitorJobs(logger):
                                                 newStatus = "AllocatingRemoteResources"
                                             elif databaseInfo['status'] == "Provisioning" or databaseInfo['status'] == "CCQueued":
                                                 newStatus = "RemoteProcessing"
+                                            elif databaseInfo['status'] == "Submitted":
+                                                newStatus = "RemoteSubmitted"
+                                            elif databaseInfo['status'] == "Error":
+                                                newStatus = "RemoteError"
+                                            elif databaseInfo['status'] == "Killed":
+                                                newStatus = "RemoteKilled"
                                             else:
                                                 newStatus = databaseInfo['status']
                                             values = ccqHubMethods.updateJobInDB({"status": str(newStatus)}, job['name'])
@@ -345,7 +364,123 @@ def monitorJobs(logger):
                             logger.info(''.join(traceback.format_exc(e)))
                 if not dataRetrieved:
                     logger.info("Unable to successfully get the status of the job(s) specified. Please re-check the credentials and try again.")
-    except RuntimeError as e:
+
+            #Need to free the instances belonging to the job and also remove it from any compute groups that are waiting to expand
+            # if not found:
+            #     with ccqHubVars.ccqHubVarLock:
+            #         print "Job " + str(job) + " has been deleted from the DB and is now be deleted from the memory object."
+            #         jobsToCheck[job]['status'] = "deleting"
+            #         try:
+            #             for group in ccqHubVars.instanceTypesAndGroups[ccqHubVars.jobMappings[job]['instanceType']]:
+            #                 if job in ccqHubVars.instanceTypesAndGroups[ccqHubVars.jobMappings[job]['instanceType']][group]['jobsWaitingOnGroup']:
+            #                     ccqHubVars.instanceTypesAndGroups[ccqHubVars.jobMappings[job]['instanceType']][group]['jobsWaitingOnGroup'].remove(job)
+            #         except Exception as e:
+            #             print "There was a problem removing the job from the jobsWaitingOnGroup variable."
+            #             print "Maybe compute group for that instance type didn't exist?" + str(job) + " Not fatal error!"
+            #             print traceback.format_exc(e)
+            #         try:
+            #             if job in ccqHubVars.jobsInProvisioningState:
+            #                 ccqHubVars.jobsInProvisioningState.remove(job)
+            #             ccqHubVars.jobMappings[job]['instancesToUse']
+            #             for instance in ccqHubVars.jobMappings[job]['instancesToUse']:
+            #                 try:
+            #                     ccqHubVars.instanceInformation[instance]['state'] = "Available"
+            #                     if instance not in ccqHubVars.availableInstances:
+            #                         ccqHubVars.availableInstances.append(instance)
+            #                 except Exception as e:
+            #                     #This instance has been deleted from the scheduler already
+            #                     pass
+            #             ccqHubVars.jobMappings[job]['instancesToUse'] = []
+            #
+            #             #Remove the job from the in-memory object since it is gone from the DB now
+            #             with ccqHubVars.ccqHubVarLock:
+            #                 ccqHubVars.jobMappings.pop(job)
+            #             writeCcqVarsToFile()
+            #
+            #         except Exception as e:
+            #             if job in ccqHubVars.jobsInProvisioningState:
+            #                 ccqHubVars.jobsInProvisioningState.remove(job)
+            #             print "There was a problem changing the state of the instances reserved for the job and adding it to the available instance list."
+            #             print "There were no instances assigned to the job " + str(job) + "yet? Not fatal error!"
+            #             print traceback.format_exc(e)
+            #             #Remove the job from the in-memory object since it is gone from the DB now
+            #             with ccqHubVars.ccqHubVarLock:
+            #                 ccqHubVars.jobMappings.pop(job)
+            #             writeCcqVarsToFile()
+            # else:
+            #     if jobsToCheck[job]['isCreating'] == "completed" and jobsToCheck[job]['status'] != "Error" and jobsToCheck[job]['status'] != "Completed" and jobsToCheck[job]['status'] != "Killed" and jobsToCheck[job]['status'] != "deleting":
+            #         if jobsToCheck[job]['status'] == "Submitted" or jobsToCheck[job]['status'] == "Running" or jobsToCheck[job]['status'] == "Queued":
+            #             print "FOUND A JOB THAT NEEDS TO BE CHECKED! NOW CHECKING THE JOB TO SEE IF IT IS STILL RUNNING!\N"
+            #             jobsToCheck[job]['name'] = str(job)
+            #             checkToSeeIfJobStillRunningOnCluster(jobsToCheck[job], scheduler)
+            #
+            #     elif jobsToCheck[job]['status'] == "Error" or jobsToCheck[job]['status'] == "Completed" or jobsToCheck[job]['status'] == "Killed" or jobsToCheck[job]['status'] == "deleting":
+            #         print "NOW CHECKING JOB TO SEE IF IT IS PAST TIME TO DELETE IT FROM THE DB: " + "\n"
+            #         #Need to see if the job has been in the Error or Completed state for more than 1 day and if it has been longer remove it
+            #         try:
+            #             #Check to see if the end time was added to the job or not if it errored it does not have an end time then we make the end time now and go from there
+            #             endTime = jobsToCheck[job]['endTime']
+            #         except Exception as e:
+            #             #There is currently no end time on the instance so we add it to the object
+            #             endTime = time.time()
+            #             with ccqHubVars.ccqHubVarLock:
+            #                 ccqHubVars.jobMappings[job]['endTime'] = endTime
+            #             writeCcqVarsToFile()
+            #
+            #         try:
+            #             if job in ccqHubVars.jobsInProvisioningState:
+            #                 ccqHubVars.jobsInProvisioningState.remove(job)
+            #             #Check to see if there are any instances remaining in the instancesToUse list for a job in the Error, Completed, or Killed state and if there are set their statuses to Available
+            #             ccqHubVars.jobMappings[job]['instancesToUse']
+            #             for instance in ccqHubVars.jobMappings[job]['instancesToUse']:
+            #                 try:
+            #                     ccqHubVars.instanceInformation[instance]['state'] = "Available"
+            #                     if instance not in ccqHubVars.availableInstances:
+            #                         ccqHubVars.availableInstances.append(instance)
+            #                 except Exception as e:
+            #                     # The instance has been removed from the DB and therefore we should not set the state internally
+            #                     pass
+            #             ccqHubVars.jobMappings[job]['instancesToUse'] = []
+            #         except Exception as e:
+            #             if job in ccqHubVars.jobsInProvisioningState:
+            #                 ccqHubVars.jobsInProvisioningState.remove(job)
+            #             print "There was a problem trying to release the instances from the job: " + str(job)
+            #             print traceback.format_exc(e)
+            #
+            #         if jobsToCheck[job]['status'] == "deleting":
+            #             try:
+            #                 with ccqHubVars.ccqHubVarLock:
+            #                     ccqHubVars.jobMappings.pop(job)
+            #                 writeCcqVarsToFile()
+            #             except Exception as e:
+            #                 pass
+            #         else:
+            #             now = time.time()
+            #             difference = now - float(endTime)
+            #             difference = timedelta(seconds=difference)
+            #             hours, remainder = divmod(difference.seconds, 3600)
+            #             minutes, seconds = divmod(remainder, 60)
+            #
+            #             totalMinutes = int(hours)*60 + int(minutes)
+            #
+            #             print "THE TOTAL NUMBER OF MINUTES PASSED SINCE THE JOB COMPLETED/ERRORED/WAS KILLED IS: " + str(totalMinutes) + "\n"
+            #             #If the jobs have been in the DB more than 1 day after entering the Error or Completed state, delete the job from the DB and from the ccqHubVars objects
+            #             if int(totalMinutes) > 1440:
+            #                 print "THE TOTAL NUMBER OF MINUTES IS GREATER THAN ONE DAY SO WE ARE DELETING THE JOB FROM THE DB\n"
+            #                 obj = {'action': 'delete', 'obj': job}
+            #                 response = ccqHubMethods.handleObj(obj)
+            #                 if response['status'] != 'success':
+            #                     print "There was an error trying to remove the old Jobs from the DB!"
+            #                 else:
+            #                     try:
+            #                         with ccqHubVars.ccqHubVarLock:
+            #                             ccqHubVars.jobMappings.pop(job)
+            #                         writeCcqVarsToFile()
+            #                     except Exception as e:
+            #                         pass
+            #                     print "The job " + str(job) + " was successfully deleted from the DB because it completed running over 1 day ago!"
+    #We have added a new job to the queue so we need to retry
+    except Exception as e:
         logger.info(''.join(traceback.format_exc()))
         pass
 
@@ -575,11 +710,12 @@ def delegateTasks(logger):
                         if values['status'] != "success":
                             if values['status'] == "error":
                                 #ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
-                                logger.info(values['payload'])
-                            elif values['status'] == "deleting":
+                                print values['payload']
+                            elif values['status'] == "Deleting":
                                 #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
                                 cleanupDeletedJob(currentJob['name'], logger)
                         else:
+                            print "THE STATUS IS: " + str(currentJob['status'])
                             if currentJob['status'] == "Deleting":
                                 # The job has been marked for deletion and should be deleted
                                 results = ccqHubMethods.handleObj("delete", currentJob)
@@ -658,7 +794,7 @@ def main():
         # Create the delegateTasks logger
         delegateTasksThreadLogger = createLoggerForThread("delegateTasksThreadLogger", "DEBUG", None, "ccqHub_Delegate_Tasks.log", True, True)
 
-        ccqCleanupThread = threading.Thread(target=monitorJobs, args=monitorJobsThreadLogger)
+        ccqCleanupThread = threading.Thread(target=monitorJobsAndInstances, args=monitorJobsThreadLogger)
         ccqCleanupThread.start()
         #print "Successfully started the monitorJobsAndInstances thread to check and monitor the jobs."
 
@@ -673,9 +809,9 @@ def main():
                 ccqDelegateTasksThread.start()
             else:
                 print "The ccqDelegateTasksThread is running."
-            # if not ccqCleanupThread.is_alive:
-            #     print "UHOH WE DIED AT SOME POINT"
-            #     ccqCleanupThread.start()
-            # else:
-            #     print "The ccqCleanupThread is running."
+            if not ccqCleanupThread.is_alive:
+                print "UHOH WE DIED AT SOME POINT"
+                ccqCleanupThread.start()
+            else:
+                print "The ccqCleanupThread is running."
 main()

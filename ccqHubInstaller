@@ -81,8 +81,8 @@ def main():
 
     # Check to see if the ccqHub directory exists or not, if it does not create it.
     if not os.path.isdir(str(prefix)):
-        print("Prefix directory not found, attempting to create the directory " + str(prefix) + " now.")
-        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var")
+        print "Prefix directory not found, attempting to create the directory " + str(prefix) + " now."
+        status, output = commands.getstatusoutput("mkdir -p " + str(prefix) + "/src " + str(prefix) + "/etc " + str(prefix) + "/bin " + str(prefix) + "/var " + str(prefix) + "/logs")
         if int(status) != 0:
             # Creation of the directory failed print the output and exit
             print("There was an error trying to create the installation directories. The error message is: " + str(output))
@@ -120,7 +120,10 @@ def main():
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
     secondStatus, secondOutput = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
     thirdStatus, thirdOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
+<<<<<<< HEAD
     #print(str(prefix) + "/bin/*")
+=======
+>>>>>>> master
     if int(status) != 0 or int(secondStatus) != 0 or int(thirdStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
@@ -253,8 +256,16 @@ def main():
         #Now we need to set the web server to start on reboot and what not. For now we are just going to run it.
         #TODO make this auto-start and make it a little more intelligent
         from subprocess import Popen
+        print "Starting the ccqHubWebServer that will receive the job submissions from the commandline utilities."
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
         Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile)
+        print "Successfully started the ccqHubWebServer."
+
+        print "Starting the ccqHandler process for processing the submitted jobs."
+        ccqHubHandlerLogFile = open(str(prefix) + "/logs/ccqHandler.txt", "w")
+        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHandler.py"], stderr=ccqHubHandlerLogFile, stdout=ccqHubHandlerLogFile)
+        print "Successfully started the ccqHandler process."
+
         # TODO cat out log file to make sure there aren't any errors
 
         # TODO make all utilities prompt for things
