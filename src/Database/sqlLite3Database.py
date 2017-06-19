@@ -86,8 +86,9 @@ class sqlLite3Database(Database):
                         nextCursor = tableConn.cursor()
                         for objectId in data:
                             try:
-                                nextCursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", objectId)
-                                dbObject = nextCursor.fetchall()
+                                with ccqHubVars.ccqHubDBLock:
+                                    nextCursor.execute("SELECT * FROM ccqHubObject WHERE hash_key=?", objectId)
+                                    dbObject = nextCursor.fetchall()
                                 # hash_key (string), meta_var (json object), job_script_text (string), sharingObj
                                 item = {}
                                 for itemData in dbObject:
@@ -246,12 +247,13 @@ class sqlLite3Database(Database):
             elif str(x) != "jobScriptText" and str(x) != "name" and str(x) != "sharingObject":
                 meta_var[x] = str(obj[x])
         try:
-            cursor = objectTableConnection.cursor()
-            data = (str(hash_key), json.dumps(meta_var), str(jobScriptText), json.dumps(sharingObject))
-            #print data
-            #print "DATA"
-            cursor.execute("INSERT INTO ccqHubObject VALUES (?, ?, ?, ?)", data)
-            objectTableConnection.commit()
+            with ccqHubVars.ccqHubDBLock:
+                cursor = objectTableConnection.cursor()
+                data = (str(hash_key), json.dumps(meta_var), str(jobScriptText), json.dumps(sharingObject))
+                #print data
+                #print "DATA"
+                cursor.execute("INSERT INTO ccqHubObject VALUES (?, ?, ?, ?)", data)
+                objectTableConnection.commit()
             return {"status": "success", "payload": "Successfully added  the object"}
         except Exception as e:
             print traceback.format_exc(e)
@@ -263,9 +265,10 @@ class sqlLite3Database(Database):
         except KeyError as e:
             hash_key = obj['hash_key']
         try:
-            cursor = objectTableConnection.cursor()
-            cursor.execute("DELETE FROM ccqHubObject WHERE hash_key=?", (hash_key,))
-            objectTableConnection.commit()
+            with ccqHubVars.ccqHubDBLock:
+                cursor = objectTableConnection.cursor()
+                cursor.execute("DELETE FROM ccqHubObject WHERE hash_key=?", (hash_key,))
+                objectTableConnection.commit()
         except Exception as e:
             print traceback.format_exc(e)
             return {"status": "error", "payload": {"error": "There was a problem trying to delete the object: " + str(hash_key), "traceback": traceback.format_exc(e)}}
@@ -328,7 +331,8 @@ class sqlLite3Database(Database):
                 pass
         try:
             if len(dataToInsert) > 0:
-                cursor.executemany("INSERT INTO ccqHubLookup VALUES (?, ?, ?)", dataToInsert)
+                with ccqHubVars.ccqHubDBLock:
+                    cursor.executemany("INSERT INTO ccqHubLookup VALUES (?, ?, ?)", dataToInsert)
             lookupTableConnection.commit()
         except Exception as e:
             print traceback.format_exc(e)
@@ -342,9 +346,10 @@ class sqlLite3Database(Database):
         except KeyError as e:
             name = obj['hash_key']
         try:
-            cursor = lookupTableConnection.cursor()
-            cursor.execute("DELETE FROM ccqHubLookup WHERE objectID=?", (name,))
-            lookupTableConnection.commit()
+            with ccqHubVars.ccqHubDBLock:
+                cursor = lookupTableConnection.cursor()
+                cursor.execute("DELETE FROM ccqHubLookup WHERE objectID=?", (name,))
+                lookupTableConnection.commit()
         except Exception as e:
             print traceback.format_exc(e)
             return {"status": "error", "payload": {"error": "There was a problem trying to delete the indexes for the object: " + str(name), "traceback": traceback.format_exc(e)}}
@@ -353,23 +358,25 @@ class sqlLite3Database(Database):
 
     def createTable(self, tableName):
         try:
-            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
-            c = conn.cursor()
-            if "lookup" in str(tableName).lower():
-                c.execute("CREATE TABLE ccqHubLookup (hash_key, range_key, objectID)")
-            elif "object" in str(tableName).lower():
-                c.execute("CREATE TABLE ccqHubObject (hash_key, meta_var, jobScriptText, sharingObj)")
-            else:
-                return {"status": "error", "payload": "Unsupported table name format"}
-            conn.commit()
-            conn.close()
+            with ccqHubVars.ccqHubDBLock:
+                conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
+                c = conn.cursor()
+                if "lookup" in str(tableName).lower():
+                    c.execute("CREATE TABLE ccqHubLookup (hash_key, range_key, objectID)")
+                elif "object" in str(tableName).lower():
+                    c.execute("CREATE TABLE ccqHubObject (hash_key, meta_var, jobScriptText, sharingObj)")
+                else:
+                    return {"status": "error", "payload": "Unsupported table name format"}
+                conn.commit()
+                conn.close()
             return {"status": "success", "payload": "Successfully created table " + str(tableName)}
         except Exception as e:
             return {"status": "error", "payload": {"error": "There was a problem trying to create the table.", "traceback": traceback.format_exc(e)}}
 
     def tableConnect(self, tableName):
         try:
-            conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
+            with ccqHubVars.ccqHubDBLock:
+                conn = sqlite3.connect(str(ccqHubVars.ccqHubPrefix) + "/var/" + str(tableName) + ".db")
             return {"status": "success", "payload": conn}
         except Exception as e:
             print "There was a problem trying to connect to the local sqlite3 database: " + str(ccqHubVars.ccqHubPrefix) + "/" + str(tableName) + ".db"

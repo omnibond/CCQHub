@@ -236,7 +236,7 @@ def determineJobsToProcess():
         return {'status': 'error', 'payload': results['payload']}
     for job in results:
         print "This is the job[status] " + str(job['status'])
-        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'] != "Deleting" and job['status'] != "deleting" and str(job['isSubmitted']).lower() == "false":
+        if job['status'] != "CCQueued" and job['status'] != "Error" and job['status'].lower() != "completed" and str(job['isSubmitted']).lower() == "false":
             jobSubmitTimes[job['name']] = job['dateSubmitted']
             jobs[job['name']] = job
 
@@ -341,8 +341,14 @@ def monitorJobs():
                                                 newStatus = "RemotePending"
                                             elif databaseInfo['status'] == "CreatingCG" or databaseInfo['status'] == "expandingCG":
                                                 newStatus = "AllocatingRemoteResources"
-                                            elif databaseInfo['status'] == "CreatingCG" or databaseInfo['status'] == "expandingCG":
+                                            elif databaseInfo['status'] == "Provisioning":
                                                 newStatus = "RemoteProcessing"
+                                            elif databaseInfo['status'] == "Submitted":
+                                                newStatus = "RemoteSubmitted"
+                                            elif databaseInfo['status'] == "Error":
+                                                newStatus = "RemoteError"
+                                            elif databaseInfo['status'] == "Killed":
+                                                newStatus = "RemoteKilled"
                                             else:
                                                 newStatus = databaseInfo['status']
                                             values = ccqHubMethods.updateJobInDB({"status": str(newStatus)}, job['name'])
@@ -702,10 +708,11 @@ def delegateTasks():
                             if values['status'] == "error":
                                 #ClusterMethods.writeToErrorLog(values['payload'], "ccq Job " + str(currentJob['name']))
                                 print values['payload']
-                            elif values['status'] == "deleting":
+                            elif values['status'] == "Deleting":
                                 #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it also need to add the instances assigned to the job (if any) back to the available instance pool
                                 cleanupDeletedJob(currentJob['name'])
                         else:
+                            print "THE STATUS IS: " + str(currentJob['status'])
                             if currentJob['status'] == "Deleting":
                                 # The job has been marked for deletion and should be deleted
                                 results = ccqHubMethods.handleObj("delete", currentJob)
