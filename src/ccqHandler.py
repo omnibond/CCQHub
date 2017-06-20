@@ -153,6 +153,7 @@ def cloudJobSubmission(jobObj, logger):
 
 
 def localJobSubmission(jobObj, logger):
+    values = createSchedulerObject(jobObj['targetName'], jobObj['schedType'], None, None, None, None)
     logger.info("Need to do some work here, shouldn't be too bad actually. Just need to modify the Scheduler file to fit the needs of the local scheduler")
 
 
@@ -172,7 +173,7 @@ def determineNextStepsForJob(jobId, targetName, schedType, logger):
         targetInfo = {}
         values = ccqHubMethods.getTargetInformation(targetName, schedType)
         if values['status'] != "success":
-            logger.info(values['payload'])
+            return {"status": "error", "payload": values['payload']}
         else:
             targetInfo = values['payload']
 
@@ -701,7 +702,8 @@ def delegateTasks(logger):
 
                                 elif values['payload']['nextStep'] == "localSubmit":
                                     # TODO do stuff here for the local job submission implementation
-                                    logger.info("Not yet implemented!")
+                                    values = localJobSubmission(currentJob, logger)
+                                    logger.info(values)
                                 else:
                                     logger.info("The nextStep state requested has not been implemented yet.")
                     except Exception as e:

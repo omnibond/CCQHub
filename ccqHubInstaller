@@ -120,10 +120,6 @@ def main():
     status, output = commands.getstatusoutput("cp -R src " + str(prefix) + "/")
     secondStatus, secondOutput = commands.getstatusoutput("cp -R bin " + str(prefix) + "/")
     thirdStatus, thirdOutput = commands.getstatusoutput("chmod +x " + str(prefix) + "/bin/*")
-<<<<<<< HEAD
-    #print(str(prefix) + "/bin/*")
-=======
->>>>>>> master
     if int(status) != 0 or int(secondStatus) != 0 or int(thirdStatus) != 0:
         # Installation of ccqHub failed print the error and exit
         if int(status) != 0:
