@@ -40,102 +40,37 @@ class SlurmScheduler(Scheduler):
     def __init__(self, **kwargs):
         super(SlurmScheduler, self).__init__(**kwargs)
 
-    def checkJobs(self, instancesToCheck, canidatesForTermination, toTerminate, instancesRunningOn, instanceRelations, job, isAutoscalingJob):
-        #TODO This will have to change for local submission stuff
-        #set the user and username to be ccq so that all jobs can be seen. ccq user is the Torque admin
-        # os.environ["USER"] = ccqHubMethods.ccqUserName
-        # os.environ["USERNAME"] = ccqHubMethods.ccqUserName
-        # os.environ["LOGNAME"] = ccqHubMethods.ccqUserName
-
+    def checkJobs(self, job):
+        # Check to see if the job is still running on the local Slurm Cluster, if it is update the status of the job to Running, if not then we return not running and it will be processed as completed.
         jobInDBStillRunning = False
         status = ""
         output = ""
 
-        if isAutoscalingJob == "true":
-            status, output = commands.getstatusoutput('sudo /opt/slurm/bin/scontrol -o show job ' + str(job['schedulerJobName']))
-        else:
-            status, output = commands.getstatusoutput('sudo /opt/slurm/bin/scontrol -o show job ')
+        status, output = commands.getstatusoutput('sudo /opt/slurm/bin/scontrol -o show job ' + str(job['schedulerJobName']))
+        splitText = output.split("\n")
+        #The first Item is a blank line so pop it off the stack
+        splitText.pop(0)
 
-        #This means that isAutoscalingJob is true and the job no longer exists in the DB
-        if "Invalid job id" in output:
-            print "This job is no longer running and the instances need to be released back into the queue if not near the termination point and not running other jobs!"
-            for x in range(len(instancesRunningOn)):
-                status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scontrol -o show node=" + str(instancesRunningOn[x]))
-                splitText = output.split("NodeName=")
-                #The first Item is a blank line so pop it off the stack
-                splitText.pop(0)
+        listOfJobsAndAttrs = []
 
-                nodeState = ""
-                for node in splitText:
-                    node = node.replace(" \n", "")
-                    nodeAttrs = node.split(" ")
-                    for nodeAttr in nodeAttrs:
-                       keyValue = nodeAttr.split("=")
-                       if len(keyValue) > 1:
-                           if keyValue[0] == "State":
-                               nodeState = keyValue[1]
+        for job in splitText:
+            job = job.replace(" \n", "")
+            jobAttrs = job.split(" ")
+            tempNodeDict = {}
+            for jobAttr in jobAttrs:
+                keyValue = jobAttr.split("=")
+                if len(keyValue) > 1:
+                   tempNodeDict[keyValue[0]] = keyValue[1]
+            listOfJobsAndAttrs.append(tempNodeDict)
 
-                if str(nodeState).lower() == "idle" and isAutoscalingJob == "true" and canidatesForTermination[instanceRelations[instancesRunningOn[x]]]['canidate']:
-                    os.system('sudo /opt/slurm/bin/scontrol update NodeName=' + str(instancesRunningOn[x]) + ' State=DRAIN Reason=\"Instance marked for possible termination\"')
-                    toTerminate.append(instanceRelations[instancesRunningOn[x]])
+        for slurmJob in listOfJobsAndAttrs:
+            if slurmJob['JobState'] == "RUNNING" and job['schedulerJobName'] == slurmJob['JobName']:
+                values = ccqHubMethods.updateJobInDB({"status": "Running", "batchHost": slurmJob['BatchHost']}, job['jobId'])
+                if values['status'] != "success":
+                    print "There was an error trying to save the new job state to the DB!"
+                jobInDBStillRunning = True
 
-        #This means that the job is not autoscaling and there are no jobs running
-        elif "No jobs" in output:
-            #Job is completed or is no longer associated with the scheduler so we say the job is completed and the nodes
-            #are marked free for normal use
-            print "This job is no longer running and the instances need to be released back into the queue if not near the termination point!"
-            for x in range(len(instancesRunningOn)):
-                for item in instancesRunningOn:
-                    instancesToCheck += str(item).split(".")[0] + ","
-                #Strip off trailing comma
-                instancesToCheck = instancesToCheck[:len(instancesToCheck)-1]
-                status, output = commands.getstatusoutput("sudo /opt/slurm/bin/scontrol -o show node=" + str(instancesToCheck))
-                splitText = output.split("NodeName=")
-                #The first Item is a blank line so pop it off the stack
-                splitText.pop(0)
-
-                listOfNodesAndAttrs = []
-
-                for node in splitText:
-                    node = node.replace(" \n", "")
-                    nodeAttrs = node.split(" ")
-                    tempNodeDict = {}
-                    for nodeAttr in nodeAttrs:
-                       keyValue = nodeAttr.split("=")
-                       if len(keyValue) > 1:
-                           tempNodeDict[keyValue[0]] = keyValue[1]
-                    listOfNodesAndAttrs.append(tempNodeDict)
-
-                for node in listOfNodesAndAttrs:
-                    if str(node['State']).lower() == str("idle").lower() and isAutoscalingJob == "true" and canidatesForTermination[instanceRelations[instancesRunningOn[x]]]['canidate']:
-                        os.system('sudo /opt/slurm/bin/scontrol update NodeName=' + str(instancesRunningOn[x]) + ' State=DRAIN Reason=\"Instance marked for possible termination\"')
-                        toTerminate.append(instanceRelations[instancesRunningOn[x]])
-
-        else:
-            splitText = output.split("\n")
-            #The first Item is a blank line so pop it off the stack
-            splitText.pop(0)
-
-            listOfJobsAndAttrs = []
-
-            for job in splitText:
-                job = job.replace(" \n", "")
-                jobAttrs = job.split(" ")
-                tempNodeDict = {}
-                for jobAttr in jobAttrs:
-                   keyValue = jobAttr.split("=")
-                   if len(keyValue) > 1:
-                       tempNodeDict[keyValue[0]] = keyValue[1]
-                listOfJobsAndAttrs.append(tempNodeDict)
-
-            for slurmJob in listOfJobsAndAttrs:
-                if slurmJob['JobState'] == "RUNNING" and job['schedulerJobName'] == slurmJob['JobName']:
-                    values = ccqHubMethods.updateJobInDB({"status": "Running", "batchHost": slurmJob['BatchHost']}, job['jobId'])
-                    if values['status'] != "success":
-                        print "There was an error trying to save the new job state to the DB!"
-                    jobInDBStillRunning = True
-
-        return {"status" : "success", "payload": {"jobInDBStillRunning": jobInDBStillRunning, "toTerminate": toTerminate}}
+        return {"status": "success", "payload": {"jobInDBStillRunning": jobInDBStillRunning}}
 
     def checkNodeForNodesToPossiblyTerminate(self, instanceNamesToCheck, instanceIdsToCheck):
         #TODO This will have to change for local submission stuff
