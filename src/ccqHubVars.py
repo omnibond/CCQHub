@@ -40,6 +40,9 @@ global ccqHubPrefix
 global jobMappings
 # {"<job_id>": {<job_info>}}
 
+global jobsTransferringOutput
+# [ <job1>, <job2>,]
+
 global ccqHubVarFileBackup
 
 
@@ -54,6 +57,7 @@ def init():
     global ccqHubPrefix
     global jobMappings
     global ccqHubVarFileBackup
+    global jobsTransferringOutput
 
     parser = ConfigParser.ConfigParser()
 
@@ -70,6 +74,7 @@ def init():
                 ccqHubDBLock = None
                 ccqHubFileLock = None
                 ccqHubVarLock = None
+                jobsTransferringOutput = []
                 ccqHubVarFileBackup = str(ccqHubPrefix) + "/var/ccqHubVarsBackup.json"
                 if os.path.isfile(ccqHubVarFileBackup):
                     try:
@@ -93,6 +98,7 @@ def init():
                 ccqHubVarLock = None
                 jobMappings = None
                 ccqHubVarFileBackup = None
+                jobsTransferringOutput = []
 
         except Exception as e:
             print traceback.format_exc(e)
@@ -106,6 +112,8 @@ def init():
             databaseType = None
             jobMappings = None
             ccqHubVarFileBackup = None
+            jobsTransferringOutput = []
+
     else:
         ccqHubLookupDBName = None
         ccqHubObjectDBName = None
@@ -116,6 +124,7 @@ def init():
         databaseType = None
         jobMappings = None
         ccqHubVarFileBackup = None
+        jobsTransferringOutput = []
 
 def initInstaller(prefix):
     global ccqHubConfigFileLocation
@@ -127,6 +136,7 @@ def initInstaller(prefix):
     global databaseType
     global ccqHubPrefix
     global ccqHubVarFileBackup
+    global jobsTransferringOutput
 
     parser = ConfigParser.ConfigParser()
 
@@ -146,6 +156,7 @@ def initInstaller(prefix):
                 ccqHubObjectDBName = None
                 databaseType = None
                 ccqHubPrefix = None
+                jobsTransferringOutput = []
 
         except Exception as e:
             print traceback.format_exc(e)
@@ -153,6 +164,7 @@ def initInstaller(prefix):
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
             ccqHubPrefix = None
+            jobsTransferringOutput = []
 
 
 #This function takes in a section name and a key name and then returns the value of that key that is in the config file.
