@@ -379,6 +379,11 @@ def monitorCloudJobs(logger):
                 if not dataRetrieved:
                     logger.info("Unable to successfully get the status of the job(s) specified. Please re-check the credentials and try again.")
 
+            # If the job is in the Completed state, we need to transfer the remote job output files back to the ccqHub server where the job was submitted
+            if str(ccqHubVars.jobMappings[job['name']]['status']).lower() == "completed":
+                # We need to add this job to the thread pool that handles transferring the job output files back to the ccqHub server
+                with ccqHubVars.ccqHubVarLock:
+                    ccqHubVars.jobsTransferringOutput.append(job['name'])
 
 
     #     if jobsToCheck[job]['isCreating'] == "completed" and jobsToCheck[job]['status'] != "Error" and jobsToCheck[job]['status'] != "Completed" and jobsToCheck[job]['status'] != "Killed" and jobsToCheck[job]['status'] != "deleting":
