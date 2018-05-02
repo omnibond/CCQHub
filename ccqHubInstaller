@@ -23,7 +23,50 @@ import ConfigParser
 import threading
 
 
+def checkPythonDependencies():
+    missingPackages = []
+    try:
+        import bottle
+    except ImportError:
+        missingPackages.append("bottle")
+
+    try:
+        import tornado
+    except ImportError:
+        missingPackages.append("tornado")
+
+    try:
+        import paramiko
+    except ImportError:
+        missingPackages.append("paramiko")
+
+    try:
+        import bottle
+    except ImportError:
+        missingPackages.append("bottle")
+
+    try:
+        import cryptography
+    except ImportError:
+        missingPackages.append("cryptography")
+
+    if len(missingPackages) != 0:
+        for mp in missingPackages:
+            print "CCQHub requires that the " + str(mp) + " Python pip package be installed."
+            print "You can install it by issuing the following command: pip install -U " + str(mp) + ""
+        return {"status": "error", "payload": "Please install the required packages and then re-run the CCQHub installer."}
+    else:
+        return {"status": "success", "payload": "All required packages are installed."}
+
+
 def main():
+
+    # Check if the user has the proper dependencies installed and if not prompt them to install them
+    values = checkPythonDependencies()
+    if values['status'] != "success":
+        print values
+        sys.exit(0)
+
     # Create the DB Interface to allow DB interaction
     #TODO This is going to change just not sure exactly how best to change it at the moment
     sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/src"))
@@ -254,12 +297,12 @@ def main():
         from subprocess import Popen
         print "Starting the ccqHubWebServer that will receive the job submissions from the commandline utilities."
         logfile = open(str(prefix) + "/logs/ccqHubWebServerLogFile.txt", "w")
-        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile)
+        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHubWebServer.py"], stderr=logfile, stdout=logfile, close_fds=True)
         print "Successfully started the ccqHubWebServer."
 
         print "Starting the ccqHandler process for processing the submitted jobs."
         ccqHubHandlerLogFile = open(str(prefix) + "/logs/ccqHandler.txt", "w")
-        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHandler.py"], stderr=ccqHubHandlerLogFile, stdout=ccqHubHandlerLogFile)
+        Popen(['/usr/bin/python2.7', str(prefix) + "/src/ccqHandler.py", str(prefix)], stderr=ccqHubHandlerLogFile, stdout=ccqHubHandlerLogFile, close_fds=True)
         print "Successfully started the ccqHandler process."
 
         # TODO cat out log file to make sure there aren't any errors

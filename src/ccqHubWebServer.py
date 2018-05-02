@@ -2,6 +2,7 @@ from bottle import run
 import argparse
 
 import appImports
+import logging
 
 parser = argparse.ArgumentParser(description="Runs the ccqHub webserver that accepts requests for job submission.")
 parser.add_argument('-V', '--version', action='version', version='ccqHubWebServer (version 0.1)')

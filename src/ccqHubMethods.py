@@ -185,7 +185,7 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
                     #Need to figure out how to do the average run time of the two date time objects
                     thisRun = int(endTime) - int(startTime)
                     prevAvg = timedelta(days=previousAvg['days'], hours=previousAvg['hours'], minutes=previousAvg['minutes'], seconds=previousAvg['seconds'])
-                    newAvgSeconds = (prevAvg.seconds + thisRun.seconds) / 2
+                    newAvgSeconds = (prevAvg.seconds + thisRun) / 2
                     newAvg = timedelta(seconds=newAvgSeconds)
                     hours, remainder = divmod(newAvg.seconds, 3600)
                     minutes, seconds = divmod(remainder, 60)
@@ -425,11 +425,10 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
             schedulerInstanceName = scheduler['instanceName']
 
         if str(isCert) == "False":
-                password = encodeString("ccqpwdfrval", str(password))
-                userName = encodeString("ccqunfrval", str(userName))
+            password = encodeString("ccqpwdfrval", str(password))
+            userName = encodeString("ccqunfrval", str(userName))
 
         url = "https://" + str(schedulerIpAddress) + "/srv/ccqstat"
-
 
         final = {"jobId": str(jobId), "userName": str(userName), "password": str(password), "verbose": verbose, "instanceId": instanceId, "jobNameInScheduler": None, "schedulerName": schedName, "isCert": str(isCert), 'schedulerType': schedType, 'schedulerInstanceId': schedulerInstanceId, 'schedulerInstanceName': schedulerInstanceName, 'schedulerInstanceIp': schedulerIpAddress}
         data = json.dumps(final)

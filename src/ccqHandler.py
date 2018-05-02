@@ -122,9 +122,11 @@ def cloudJobSubmission(jobObj, logger):
                         data = json.dumps(final)
                         headers = {'Content-Type': "application/json"}
                         url = "https://" + str(address) + "/srv/ccqsub"
+                        res = []
                         try:
                             req = urllib2.Request(url, data, headers)
                             res = urllib2.urlopen(req).read().decode('utf-8')
+                            print res
                             res = json.loads(res)
                         except Exception as e:
                             # We couldn't connect to the url so we need to try the other one.
@@ -385,78 +387,6 @@ def monitorCloudJobs(logger):
                 with ccqHubVars.ccqHubVarLock:
                     ccqHubVars.jobsTransferringOutput.append(job['name'])
 
-
-    #     if jobsToCheck[job]['isCreating'] == "completed" and jobsToCheck[job]['status'] != "Error" and jobsToCheck[job]['status'] != "Completed" and jobsToCheck[job]['status'] != "Killed" and jobsToCheck[job]['status'] != "deleting":
-    #         if jobsToCheck[job]['status'] == "Submitted" or jobsToCheck[job]['status'] == "Running" or jobsToCheck[job]['status'] == "Queued":
-    #             print "FOUND A JOB THAT NEEDS TO BE CHECKED! NOW CHECKING THE JOB TO SEE IF IT IS STILL RUNNING!\N"
-    #             jobsToCheck[job]['name'] = str(job)
-    #             checkToSeeIfJobStillRunningOnCluster(jobsToCheck[job], scheduler)
-    #
-    #     elif jobsToCheck[job]['status'] == "Error" or jobsToCheck[job]['status'] == "Completed" or jobsToCheck[job]['status'] == "Killed" or jobsToCheck[job]['status'] == "deleting":
-    #         print "NOW CHECKING JOB TO SEE IF IT IS PAST TIME TO DELETE IT FROM THE DB: " + "\n"
-    #         #Need to see if the job has been in the Error or Completed state for more than 1 day and if it has been longer remove it
-    #         try:
-    #             #Check to see if the end time was added to the job or not if it errored it does not have an end time then we make the end time now and go from there
-    #             endTime = jobsToCheck[job]['endTime']
-    #         except Exception as e:
-    #             #There is currently no end time on the instance so we add it to the object
-    #             endTime = time.time()
-    #             with ccqHubVars.ccqHubVarLock:
-    #                 ccqHubVars.jobMappings[job]['endTime'] = endTime
-    #             writeCcqVarsToFile()
-    #
-    #         try:
-    #             if job in ccqHubVars.jobsInProvisioningState:
-    #                 ccqHubVars.jobsInProvisioningState.remove(job)
-    #             #Check to see if there are any instances remaining in the instancesToUse list for a job in the Error, Completed, or Killed state and if there are set their statuses to Available
-    #             ccqHubVars.jobMappings[job]['instancesToUse']
-    #             for instance in ccqHubVars.jobMappings[job]['instancesToUse']:
-    #                 try:
-    #                     ccqHubVars.instanceInformation[instance]['state'] = "Available"
-    #                     if instance not in ccqHubVars.availableInstances:
-    #                         ccqHubVars.availableInstances.append(instance)
-    #                 except Exception as e:
-    #                     # The instance has been removed from the DB and therefore we should not set the state internally
-    #                     pass
-    #             ccqHubVars.jobMappings[job]['instancesToUse'] = []
-    #         except Exception as e:
-    #             if job in ccqHubVars.jobsInProvisioningState:
-    #                 ccqHubVars.jobsInProvisioningState.remove(job)
-    #             print "There was a problem trying to release the instances from the job: " + str(job)
-    #             print traceback.format_exc(e)
-    #
-    #         if jobsToCheck[job]['status'] == "deleting":
-    #             try:
-    #                 with ccqHubVars.ccqHubVarLock:
-    #                     ccqHubVars.jobMappings.pop(job)
-    #                 writeCcqVarsToFile()
-    #             except Exception as e:
-    #                 pass
-    #         else:
-    #             now = time.time()
-    #             difference = now - float(endTime)
-    #             difference = timedelta(seconds=difference)
-    #             hours, remainder = divmod(difference.seconds, 3600)
-    #             minutes, seconds = divmod(remainder, 60)
-    #
-    #             totalMinutes = int(hours)*60 + int(minutes)
-    #
-    #             print "THE TOTAL NUMBER OF MINUTES PASSED SINCE THE JOB COMPLETED/ERRORED/WAS KILLED IS: " + str(totalMinutes) + "\n"
-    #             #If the jobs have been in the DB more than 1 day after entering the Error or Completed state, delete the job from the DB and from the ccqHubVars objects
-    #             if int(totalMinutes) > 1440:
-    #                 print "THE TOTAL NUMBER OF MINUTES IS GREATER THAN ONE DAY SO WE ARE DELETING THE JOB FROM THE DB\n"
-    #                 obj = {'action': 'delete', 'obj': job}
-    #                 response = ccqHubMethods.handleObj(obj)
-    #                 if response['status'] != 'success':
-    #                     print "There was an error trying to remove the old Jobs from the DB!"
-    #                 else:
-    #                     try:
-    #                         with ccqHubVars.ccqHubVarLock:
-    #                             ccqHubVars.jobMappings.pop(job)
-    #                         writeCcqVarsToFile()
-    #                     except Exception as e:
-    #                         pass
-    #                     print "The job " + str(job) + " was successfully deleted from the DB because it completed running over 1 day ago!"
     #We have added a new job to the queue so we need to retry
     except Exception as e:
         logger.info(''.join(traceback.format_exc()))
@@ -747,6 +677,8 @@ def createLoggerForThread(loggerName, loggerLevel, loggerFormatter, loggerOutput
 
 
 def main():
+        # Get the prefix to where ccqHub will be running from so that we can create the log files there
+        prefix = sys.argv[1] + "/logs/"
         #Set the global variables that ccq will use throughout its operation
         ccqHubVars.init()
         print "Successfully initialized the global variables for ccq."
@@ -757,19 +689,20 @@ def main():
         ccqHubVars.ccqHubDBLock = threading.RLock()
 
         # Create the logger for the monitorJobsThread
-        monitorJobsThreadLogger = createLoggerForThread("monitorJobsThreadLogger", "DEBUG", None, "ccqHub_Monitor_Jobs.log", True, True)
+        monitorCloudJobsThreadLogger = createLoggerForThread("monitorCloudJobsThreadLogger", "DEBUG", None, str(prefix) + "ccqHub_Monitor_Cloud_Jobs.log", False, False)
+        monitorJobsLocalThreadLogger = createLoggerForThread("monitorLocalJobsThreadLogger", "DEBUG", None, str(prefix) + "ccqHub_Monitor_Local_Jobs.log", False, False)
 
         # Create the delegateTasks logger
-        delegateTasksThreadLogger = createLoggerForThread("delegateTasksThreadLogger", "DEBUG", None, "ccqHub_Delegate_Tasks.log", True, True)
+        delegateTasksThreadLogger = createLoggerForThread("delegateTasksThreadLogger", "DEBUG", None, str(prefix) + "ccqHub_Delegate_Tasks.log", False, False)
 
-        cloudJobMonitorThread = threading.Thread(target=monitorJobs, args=[monitorJobsThreadLogger, "cloud"])
+        cloudJobMonitorThread = threading.Thread(target=monitorJobs, args=[monitorCloudJobsThreadLogger, "cloud"])
         cloudJobMonitorThread.start()
 
-        localJobMonitorThread = threading.Thread(target=monitorJobs, args=[monitorJobsThreadLogger, "local"])
+        localJobMonitorThread = threading.Thread(target=monitorJobs, args=[monitorJobsLocalThreadLogger, "local"])
         localJobMonitorThread.start()
         #print "Successfully started the monitorJobs thread to check and monitor the jobs."
 
-        ccqDelegateTasksThread = threading.Thread(target=delegateTasks, args=delegateTasksThreadLogger)
+        ccqDelegateTasksThread = threading.Thread(target=delegateTasks, args=[delegateTasksThreadLogger])
         ccqDelegateTasksThread.start()
 
         #Run forever and check to make sure the threads are running

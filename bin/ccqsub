@@ -72,12 +72,20 @@ def ccqsub():
     parser.add_argument('-s', metavar='<name_of_target/scheduler_to_use>', help="Specifies the name of the Scheduler/Target that you want to use. The default value is to use the default Scheduler/Target for the Scheduler type you have requested. The default Scheduler/Target can be changed utilizing the ccqHubModifyDefaultTargets utility.", default="default")
     # Scheduler Type
     parser.add_argument('-st', metavar='Torque|SLURM|ccq|default', help="Specifies the type of Scheduler that you want to use. The accepted values are Torque, Condor, SGE, and SLURM. If the Scheduler type is not specified with a job script then ccqsub will attempt to figure out from the job script what type of Scheduler the job is to be run on. If no job script is submitted then the value will default to the default Scheduler for the Cluster", default="default", choices=["Torque", "ccq", "SLURM", "default"])
-    # Use Spot Instances
-    parser.add_argument('-us', metavar='yes|no', help="Use spot instances instead of dedicated instances. The default option is \"no\"", default="no", choices=["yes", "no"])
-    # Spot Instance Price
-    parser.add_argument('-sp', metavar='<target_spot_price>', help="The targeted spot instance price that you will be willing to pay to run the instances. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0. This argument must be specified if using spot instances.", default=None)
+    #Use Spot Instances
+    parser.add_argument('-us', metavar='yes|no', help="Use spot instances instead of on demand instances. This parameter is optional and if a spot price is set it will automatically be set to yes for you. The default option is \"no\"", default="no", choices=["yes", "no"])
+    #Spot Instance Price
+    parser.add_argument('-sp', metavar='<target_spot_price>', help="The targeted spot instance price that you will be willing to pay to run the instances. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0. This argument must be specified if using spot instances. If using a Spot Fleet and multiple instance types, multiple Spot Prices can be specified using a comma separated list. The number of entries in the comma separated list must equal the number of instance types in the -it argument.", default=None)
+    #Spot Instance Weights
+    parser.add_argument('-sw', metavar='<spot_instance_weights>', help="The weighted value of each instance type. The number of instances launched is determined by the Spot Fleet Total size divided by the weights. Please see the Amazon User Guide for a more detailed explanation of how the weights affect a Spot Fleet Request. If no weights are specified then the weight for each instance type will be set to 1. If using multiple instance types, multiple Spot Instance Weights can be specified using a comma separated list. The number of entries in the comma separated list must equal the number of instance types in the -it argument.", default=None)
+    # Use Spot Fleet instead of Spot Autoscaling
+    parser.add_argument('-sf', action='store_true', help="Specifies that ccq should launch the job using a Spot Fleet instead of using Spot Autoscaling groups. If this option is selected then the -it, -ft, -sp, and the -fs arguments must be specified as well.")
+    #Spot Fleet Type
+    parser.add_argument('-ft', metavar='<spot_fleet_type>', help="Sets the type of the Spot Fleet. By choosing \"lowestPrice\" the fleet size specified will be based off of the number of instances launched. If this argument is set to \"cores\" then fleet size is determined by the number of cores each instance has and until the total number of cores in all instances is greater than the fleet size more instances will be launched. NOTE: if \"cores\" is selected DO NOT request a specific number of instances in the job script (ex: #SBATCH -N or #PBS -l nodes=2). This is because the number of instances launched is variable and if you specify too many or too few instances in your script the job will fail. This argument is required for using a Spot Fleet.", default="lowestPrice", choices=["diversified", "lowestPrice"])
+    #Spot Fleet Total Size
+    parser.add_argument('-fs', metavar='<spot_fleet_total_size>', help="The total size of the Spot Fleet. By using the -ft argument the user can choose if this size is determined by the number of instances launched or a number of total cores for all instances combined. This parameter is required when using the -sf option. A valid total size is a number greater than 0 and within your AWS Account limits.", default=None)
     # Instance type
-    parser.add_argument('-it', metavar='<instance_type>', help="Specifies the Amazon EC2 instance type that the job is to be run on. If no instance type is specified, then the amount of RAM and CPUs will be used to determine an appropriate Amazon EC2 Instance. A default instance type can be set using the \"defaultInstanceType\" directive in the ccq Config file.", default="default")
+    parser.add_argument('-it', metavar='<instance_type>', help="Specifies the Amazon EC2 instance type that the job is to be run on. If no instance type is specified, then the amount of RAM and CPUs will be used to determine an appropriate Amazon EC2 Instance. A default instance type can be set using the \"defaultInstanceType\" directive in the ccq Config file. If used with the -sf argument then multiple instance types can be specified using a comma separated list.", default="default")
     # Instance Type Optimization
     parser.add_argument('-op', metavar='cost|performance', help="Specifies whether to use the instance type that is most cost effective or one that will give better performance regardless of cost. The default is \"cost\".", default="cost", choices=["cost", "performance"])
     # Criteria Priority
@@ -92,6 +100,23 @@ def ccqsub():
     parser.add_argument('-o', metavar='<stdout_file_location>', help="The path to the file where you want the Standard Output from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
     # Location of file to write stderr to
     parser.add_argument('-e', metavar='<stderr_file_location>', help="The path to the file where you want the Standard Error from your job to be written too. The default location is the directory where ccqsub was invoked with the name of the file the job name combined with the job id on the machine where the job was submitted.", default="default")
+
+    #Kill all of the instances as soon as the CCQ job finishes do not wait to see if there are more jobs
+    parser.add_argument('-ti', action='store_true', help="Specifies that ccq should immediately terminate the instances created by the CCQ job as soon as the ccq job has completed and not to wait to see if they can be used for other jobs. This argument only applies if the job creates a new compute group. If the job re-uses existing instances they will not be terminated upon job completion.")
+    #Skip the Provisioning states and move on
+    parser.add_argument('-ps', action='store_true', help="Specifies that ccq should skip the Provisioning stage where it checks to make sure the job's user is on the Compute Nodes before continuing. This may be desired if the users are already baked into the Image. If this option is given and the users are not on the Image the job could fail.")
+    #Submit the job without waiting for all of the instances to come up
+    parser.add_argument('-si', metavar='true|false', help="Specifies if the Compute Instances should enter the Ready state without waiting for the other instances in it's group to enter the Ready state. This is used for HTC (High Throughput Computing) mode where lots of smaller jobs are submitted by the CCQ job and utilize the other compute instances as they come up. The default value is False.", default="False", choices=["True", "False"])
+    #Length of time to allow the job to run before terminating all the instances
+    parser.add_argument('-tl', metavar='<days>:<hours>:<minutes>', help="Specifies the amount of time that the job is allowed to run before CCQ will automatically terminate all the instances. If the job completes successfully within the time limit then the instances will be deleted via the CCQ auto-delete process. The default value is that there is not a timelimit and the job will run for as long as it needs to. The format to specify a time limit is: <days>:<hours>:<minutes>, this is the amount of time from the initial processing of the job that CCQ will let the job run. You may also specify \"unlimited\" if you do not want the instances to terminate until you delete them.", default="None")
+    #Just create the instances and let them run until the time limit has been reached or the job gets deleted
+    parser.add_argument('-cp', action='store_true', help="Specifies that this CCQ job should only create placeholder/parent instances and not actually submit a job to the HPC Scheduler. This allows for the compute instances to be created dynamically and remain running as long as the specified time limit. The use of this argument requires the -tl argument as well. The default value is False.")
+    # Specify the AMI ID that the user wants to launch
+    parser.add_argument('-ai', metavar='<ami_id>', help="Specifies if the AMI Id of the AMI that CCQ should use to launch the Compute Instances for the job. This MUST be an AMI that contains the CloudyCluster software or IT WILL NOT WORK. If no AMI is specified then the CloudyCluster AMI the Scheduler instance is using will be used. The ami format is of the form: ami-xxxxxxxx", default="None")
+    # Specify the maximum amount of time the instances created by the job should run without any jobs before being terminated
+    parser.add_argument('-mi', metavar='<maximum_idle_time>', help="Specifies the maximum amount of time that the instances created by the job should remain running if no jobs are running on the instances. The maximum idle time is specified in terms of minutes and the default is 5.", default=5)
+    # Specify the placement group that the compute instances should be launched in
+    parser.add_argument('-pg', metavar='<placement_group_name>', help="Specifies the name of the Placement group that the compute instances will be launched into. This placement group must already be created and the compute instance type must support being placed in a placement group. The default is to create a new placement group for just the compute instances if the instance type supports it.", default=None)
 
     args = parser.parse_args()
 
@@ -110,12 +135,25 @@ def ccqsub():
     schedType = args.st
     useSpot = args.us
     spotPrice = args.sp
+    spotFleetWeights = args.sw
+    useSpotFleet = args.sf
+    spotFleetType = args.ft
+    spotFleetTotalSize = args.fs
     requestedInstanceType = args.it
     optimizationChoice = args.op
     criteriaPriority = args.p
     volumeType = args.vt
     certLength = args.cl
     justPrice = args.pr
+    remoteUserName = args.ru
+    terminateInstantly = args.ti
+    skipProvisioning = args.ps
+    submitInstantly = args.si
+    timeLimit = args.tl
+    createPInstances = args.cp
+    amiId = args.ai
+    maxIdle = args.mi
+    placementGroupName = args.pg
 
     stdoutFileLocation = args.o
     stderrFileLocation = args.e
@@ -151,10 +189,36 @@ def ccqsub():
     else:
         submitHost = str(values['payload']['host']) + ":" + str(values['payload']['port'])
 
+    if createPInstances and str(timeLimit).lower() == "none":
+        print("\nIn order to create parent/placeholder instances a timelimit must be specified using the -tl command. Please specify a timelimit and try again.")
+        sys.exit(0)
+
+    storeTrueCommands = ["-sf", "-pr", "-cp"]
+
+    if ccAccessKey is None and remoteUserName != "default":
+        print("\nThe remote username (-ru) argument can only be used in combination with the -i argument. Please either remove the -ru argument or provide an app key using the -i argument.")
+        sys.exit(0)
+
+    # Get list of options that were specified via the commandline so that they are not overriden by the parameters in the script.
+    options = parser._actions
+    temp = vars(args)
+    specifiedViaCommandLine = []
+    for k in options:
+        try:
+            if str(getattr(k, 'default')) != str(temp[getattr(k, 'dest')]):
+                specifiedViaCommandLine.append(getattr(k, 'dest'))
+                #print "USER SPECIFIED VALUE, DO NOT OVERRIDE"
+            else:
+                pass
+                #print "Not specified via commandline it is ok to override from script."
+        except Exception as e:
+            pass
+            #print "NOT SPECIFIED"
+
     if jobScriptLocation is not None:
         status, output = commands.getstatusoutput("pwd")
         #print "A job script location was specified, ccqsub will read the ccqsub/job arguments from the job script instead of from the commandline!\n"
-        ccOptionsParsed = {"numberOfInstancesRequested": str(numberOfInstancesRequested),  "numCpusRequested": str(numCpusRequested), "wallTimeRequested": "None", "stdoutFileLocation": str(stdoutFileLocation), "stderrFileLocation": str(stderrFileLocation), "combineStderrAndStdout": "None", "copyEnvironment": "None", "eventNotification": "None", "mailingAddress": "None", "jobRerunable": "None", "memoryRequested": str(memoryRequested), "accountToCharge": "None", "jobBeginTime": "None", "jobArrays": "None", "useSpot": str(useSpot), "spotPrice": str(spotPrice), "requestedInstanceType": str(requestedInstanceType), "networkTypeRequested": str(networkTypeRequested), "optimizationChoice": str(optimizationChoice),  "pathToExecutable": "None", "criteriaPriority": str(criteriaPriority), "schedulerToUse": str(schedulerToUse), "schedType": str(schedType), "volumeType": str(volumeType), "certLength": str(certLength), "jobWorkDir": str(output), "justPrice": str(justPrice)}
+        ccOptionsParsed = {"numberOfInstancesRequested": str(numberOfInstancesRequested),  "numCpusRequested": str(numCpusRequested), "wallTimeRequested": "None", "stdoutFileLocation": str(stdoutFileLocation), "stderrFileLocation": str(stderrFileLocation), "combineStderrAndStdout": "None", "copyEnvironment": "None", "eventNotification": "None", "mailingAddress": "None", "jobRerunable": "None", "memoryRequested": str(memoryRequested), "accountToCharge": "None", "jobBeginTime": "None", "jobArrays": "None", "useSpot": str(useSpot), "spotPrice": str(spotPrice), "requestedInstanceType": str(requestedInstanceType), "networkTypeRequested": str(networkTypeRequested), "optimizationChoice": str(optimizationChoice),  "pathToExecutable": "None", "criteriaPriority": str(criteriaPriority), "schedulerToUse": str(schedulerToUse), "schedType": str(schedType), "volumeType": str(volumeType), "certLength": str(certLength), "jobWorkDir": str(output), "justPrice": str(justPrice), "useSpotFleet": str(useSpotFleet), "spotFleetWeights": str(spotFleetWeights), "spotFleetTotalSize": spotFleetTotalSize, "spotFleetType": str(spotFleetType), "terminateInstantly": str(terminateInstantly), "skipProvisioning": str(skipProvisioning), "submitInstantly": str(submitInstantly), "timeLimit": str(timeLimit), "createPInstances": str(createPInstances), "amiId": str(amiId), "maxIdle": str(maxIdle), "placementGroupName": str(placementGroupName)}
         if jobName is None:
             #If a job name is not specified with the job script then we assume the name to be the name of the job script
             splitJobScriptLocation = jobScriptLocation.split('/')
@@ -180,14 +244,27 @@ def ccqsub():
                 if line[:3] == "#CC":
                     #It is a comment and could possibly be a ccqsub command/parameter
                     #List of possible ccqsub directives that we recognize and support
-                    possibleCommands = ["-it", "-nt", "-op", "-p", "-ni", "-mem", "-cpu", "-s", "-st", "-jn", "-vt", "-us", "-sp"]
-                    argumentNames = {"-mem": "memoryRequested", "-it": "requestedInstanceType", "-nt": "networkTypeRequested", "-op": "optimizationChoice", "-p": "criteriaPriority", "-ni": "numberOfInstancesRequested", "-cpu": "numCpusRequested", "-s": "schedulerToUse", "-st": "schedType", "-jn": "jobName", "-vt": "volumeType", "-us": "useSpot", "-sp": "spotPrice"}
+                    possibleCommands = ["-it", "-nt", "-op", "-p", "-ni", "-mem", "-cpu", "-s", "-st", "-jn", "-vt", "-us", "-sp", "-sw", "-sf", "-ft", "-fs", "-ti", "-ps", "-si", "-tl", "-cp", "-ai", "-mi", "-pg"]
+                    argumentNames = {"-mem": "memoryRequested", "-it": "requestedInstanceType", "-nt": "networkTypeRequested", "-op": "optimizationChoice", "-p": "criteriaPriority", "-ni": "numberOfInstancesRequested", "-cpu": "numCpusRequested", "-s": "schedulerToUse", "-st": "schedType", "-jn": "jobName", "-vt": "volumeType", "-us": "useSpot", "-sp": "spotPrice", "-sw": "spotFleetWeights", "-sf": "useSpotFleet", "-ft": "spotFleetType", "-fs": "spotFleetTotalSize", "-ti": "terminateInstantly", "-ps": "skipProvisioning", "-si": "submitInstantly", "-tl": "timeLimit", "-cp": "createPInstances", "-ai": "amiId", "-mi": "maxIdle", "-pg": "placementGroupName"}
                     splitLine = line.split(' ')
                     for command in possibleCommands:
-                        if splitLine[1] == command:
-                            #Set the local variable that could have been passed in command line here
-                            parsedCommand = splitLine[2]
-                            ccOptionsParsed[argumentNames[command]] = parsedCommand[:len(parsedCommand)-1]
+                        if str(splitLine[1]).replace("\n", "") == command:
+                            # If the variable is a True or False value, set the value to True because it is in the script
+                            if str(command).replace("-", "") not in specifiedViaCommandLine:
+                                if command in storeTrueCommands:
+                                    ccOptionsParsed[argumentNames[command]] = True
+                                else:
+                                    #Set the local variable that could have been passed in command line here
+                                    if str(command).replace("-", "") == "us":
+                                        try:
+                                            parsedCommand = splitLine[2]
+                                        except Exception as e:
+                                            # If specified in the script without a value default to yes
+                                            parsedCommand = "yes"
+                                    else:
+                                        parsedCommand = splitLine[2]
+
+                                    ccOptionsParsed[argumentNames[command]] = parsedCommand[:len(parsedCommand)-1]
 
                 #Reallllly need to add error checking here to make sure they don't put in invalid options!!
 
@@ -197,6 +274,7 @@ def ccqsub():
                     #runs from the location that the user calls qsub from
                     possibleCommands = ["-o", "-e", "-l"]
                     argumentNames = {"-o": "stdoutFileLocation", "-e": "stderrFileLocation"}
+                    argumentNamesCC = {"mem": "mem", "nodes": "ni", "select": "ni", "ppn": "cpu"}
                     splitLine = line.split(' ')
                     if len(splitLine) > 1:
                         for command in possibleCommands:
@@ -206,28 +284,34 @@ def ccqsub():
                                 for subCommand in subCommands:
                                     parsedCommand = subCommand.split("=")
                                     try:
-                                        if parsedCommand[0] != "walltime":
-                                            ccOptionsParsed[possibleArgs[parsedCommand[0]]] = parsedCommand[1].replace("\n", "")
+                                        if argumentNamesCC[parsedCommand[0]] not in specifiedViaCommandLine:
+                                            if parsedCommand[0] != "walltime":
+                                                ccOptionsParsed[possibleArgs[parsedCommand[0]]] = parsedCommand[1].replace("\n", "")
                                     except (IndexError, KeyError) as e:
                                         #The argument passed to the -l command in PBS is not required by ccqsub
                                         pass
 
                             elif len(splitLine) > 1:
-                                if splitLine[1] == command:
-                                    #Set the local variable that could have been passed in command line here
-                                    parsedCommand = splitLine[2]
-                                    ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
+                                #print splitLine
+                                #print command
+                                if str(command).replace("-", "") not in specifiedViaCommandLine:
+                                    if splitLine[1] == command:
+                                        #Set the local variable that could have been passed in command line here
+                                        parsedCommand = splitLine[2]
+                                        ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
                 elif line[:7] == "#SBATCH":
                     slurmLineCount += 1
                     possibleCommands = ["-o", "-e", "-D", "--ntasks-per-node", "--mem", "-N", "--nodes"]
-                    argumentNames = {"-o": "stdoutFileLocation", "--output": "stdoutFileLocation", "-e": "stderrFileLocation", "--error": "stderrFileLocation", "-D": "jobWorkDir", "--ntasks-per-node": "numCpusRequested", "--mem": "memoryRequested", "-N": "numberOfInstancesRequested", "--nodes": "numberOfInstancesRequested", "--workdir": "--workdir"}
+                    argumentNames = {"-o": "stdoutFileLocation", "--output": "stdoutFileLocation", "-e": "stderrFileLocation", "--error": "stderrFileLocation", "-D": "jobWorkDir", "--ntasks-per-node": "numCpusRequested", "--mem": "memoryRequested", "-N": "numberOfInstancesRequested", "--nodes": "numberOfInstancesRequested", "--workdir": "--workdir" }
+                    argumentNamesCC = {"--mem": "mem", "-N": "ni", "--nodes": "ni", "--ntasks-per-node": "cpu"}
                     splitLine = line.split(' ')
                     for command in possibleCommands:
                         if len(splitLine) > 1:
                             if splitLine[1] == command:
                                 #Set the local variable that could have been passed in command line here
                                 parsedCommand = splitLine[2]
-                                ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
+                                if argumentNamesCC[command] not in specifiedViaCommandLine:
+                                    ccOptionsParsed[argumentNames[command]] = parsedCommand.replace("\n", "")
                 elif line[:2] == "#$":
                     sgeLineCount += 1
             if ccOptionsParsed['schedType'] == "default" and ccOptionsParsed['schedulerToUse'] == "default":
@@ -258,11 +342,17 @@ def ccqsub():
         if str(ccOptionsParsed["spotPrice"]).lower() != "none":
             ccOptionsParsed['useSpot'] = "yes"
 
-        #Make sure all the spot options are valid
+        # Make sure all the spot options are valid
         validateSpotInstanceParameters(ccOptionsParsed)
+
+        # Make sure all the Spot Fleet Options are valid
+        validateSpotFleetParameters(ccOptionsParsed)
 
         #Make sure all the instance parameters that we can check here are valid
         validateInstanceParameters(ccOptionsParsed)
+
+        # Make sure all the general options are valid
+        validateGeneralParameters(ccOptionsParsed)
 
     values = generateJobMD5Hash(jobScriptText)
     if values['status'] != 'success':
@@ -271,6 +361,14 @@ def ccqsub():
         sys.exit(0)
     else:
         jobMD5Hash = values['payload']['md5']
+
+    values = convertTimeLimitToSeconds(ccOptionsParsed)
+    if values['status'] != 'success':
+        print(values['payload'])
+        print("\n")
+        sys.exit(0)
+    else:
+        ccOptionsParsed['timeLimit'] = values['payload']['timeLimit']
 
     valKey = "unpw"
     attempts = 0
@@ -335,24 +433,113 @@ def ccqsub():
 def validateSpotInstanceParameters(ccOptionsParsed):
     #Validate Spot Instance Information
     if ccOptionsParsed["useSpot"] == "yes":
-        if ccOptionsParsed["spotPrice"] is not None:
-            try:
-                tempFloat = float(ccOptionsParsed["spotPrice"])
-                if tempFloat <= 0:
-                    print("You must specify a spot price greater than 0.\n")
+        if "spotPrice" in ccOptionsParsed and ccOptionsParsed["spotPrice"] is not None:
+            if str(ccOptionsParsed["useSpotFleet"]).lower() != "true":
+                # if not using a Spot Fleet we can only have one Spot Price
+                try:
+                    tempFloat = float(ccOptionsParsed["spotPrice"])
+                    if tempFloat <= 0:
+                        print("You must specify a spot price greater than 0.\n")
+                        sys.exit(0)
+                    else:
+                        ccOptionsParsed["spotPrice"] = "{:1.222f}".format(tempFloat)
+                except Exception:
+                    print("The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
                     sys.exit(0)
-                else:
-                    ccOptionsParsed["spotPrice"] = "{:1.222f}".format(tempFloat)
-            except:
-                print("The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
-                sys.exit(0)
+            else:
+                # If using a Spot Fleet we can have multiple Spot Prices for each instance type
+                spotPriceString = ""
+                for spotPrice in str(ccOptionsParsed["spotPrice"]).split(","):
+                    try:
+                        tempFloat = float(spotPrice)
+                        if tempFloat <= 0:
+                            print("You must specify a spot price greater than 0.\n")
+                            sys.exit(0)
+                        else:
+                            spotPriceString += str("{:1.222f}".format(tempFloat)) + ","
+                    except Exception:
+                        print("The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
+                        sys.exit(0)
+                ccOptionsParsed["spotPrice"] = spotPriceString[:len(spotPriceString)-1]
         else:
             print("If you specify the use of spot instances you must specify a target spot price and an instance type.\n")
             sys.exit(0)
 
         if str(ccOptionsParsed["requestedInstanceType"]).lower() == "default":
-            print("If you specify the use of spot instances you must specify a specific instance type.\n")
+            print("If you specify the use of spot instances you must specify an instance type.\n")
             sys.exit(0)
+
+        if "," in str(ccOptionsParsed["requestedInstanceType"]) and str(ccOptionsParsed['useSpotFleet']).lower() == "false":
+            print("In order to specify multiple instance types you must pass the -sf argument to ccq.\n")
+            sys.exit(0)
+
+
+def validateSpotFleetParameters(ccOptionsParsed):
+    #Validate Spot Fleet Information
+    if str(ccOptionsParsed["useSpotFleet"]).lower() == "true":
+        if "spotPrice" in ccOptionsParsed and ccOptionsParsed["spotPrice"] is not None:
+            # If using a Spot Fleet we can have multiple Spot Prices for each instance type
+                spotPriceString = ""
+                for spotPrice in str(ccOptionsParsed["spotPrice"]).split(","):
+                    try:
+                        tempFloat = float(spotPrice)
+                        if tempFloat <= 0:
+                            print("You must specify a spot price greater than 0.\n")
+                            sys.exit(0)
+                        else:
+                            spotPriceString += str("{:1.222f}".format(tempFloat)) + ","
+                    except Exception:
+                        print("The spot price you have entered is not valid. A valid spot price is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
+                        sys.exit(0)
+                ccOptionsParsed["spotPrice"] = spotPriceString[:len(spotPriceString)-1]
+        else:
+            print("If you specify the use of a Spot Fleet you must specify a target spot price and instance types.\n")
+            sys.exit(0)
+
+        if str(ccOptionsParsed["requestedInstanceType"]).lower() == "default":
+            print("If you specify the use of a Spot Fleet you must specify an instance type.\n")
+            sys.exit(0)
+        else:
+            if len(str(ccOptionsParsed["requestedInstanceType"]).split(",")) != len(str(ccOptionsParsed["spotPrice"]).split(",")):
+                print("If specifying multiple Spot Prices for the different Spot Fleet instance types the number of Spot Prices specified must be the same as the number of instance types specified in the -it argument.\n")
+                sys.exit(0)
+
+        if str(ccOptionsParsed["spotFleetWeights"]).lower() == "none":
+            spotWeights = ""
+            for instanceType in str(ccOptionsParsed["requestedInstanceType"]).split(","):
+                spotWeights += "1,"
+            ccOptionsParsed["spotFleetWeights"] = spotWeights[:len(spotWeights)-1]
+
+        elif len(str(ccOptionsParsed["spotFleetWeights"]).split(",")) != len(str(ccOptionsParsed["requestedInstanceType"]).split(",")):
+            print("If specifying multiple Spot Weights for the different Spot Fleet instance types the number of Spot Weights specified must be the same as the number of instance types specified in the -it argument.\n")
+            sys.exit(0)
+
+        # If using a Spot Fleet we can have multiple Spot Weights for each instance type need to check and make sure they are properly specified.
+        spotWeightString = ""
+        for spotPrice in str(ccOptionsParsed["spotFleetWeights"]).split(","):
+            try:
+                tempFloat = float(spotPrice)
+                if tempFloat <= 0:
+                    print("You must specify a Spot Fleet Instance Type Weight greater than 0.\n")
+                    sys.exit(0)
+                else:
+                    spotWeightString += str("{:1.222f}".format(tempFloat)) + ","
+            except Exception:
+                print("The Spot Instance Type Weight you have entered is not valid. A valid Spot Instance Type Weight is a number formatted as 1.23 that contains no letters, and must be greater than 0.\n")
+                sys.exit(0)
+        ccOptionsParsed["spotFleetWeights"] = spotWeightString[:len(spotWeightString)-1]
+
+        if "," in str(ccOptionsParsed["requestedInstanceType"]) and str(ccOptionsParsed['useSpotFleet']).lower() == "false":
+            print("In order to specify multiple instance types you must pass the -sf argument to ccq.\n")
+            sys.exit(0)
+
+        if str(ccOptionsParsed['useSpotFleet']).lower() == "true":
+            if str(ccOptionsParsed['spotFleetTotalSize']).lower() == "none":
+                print("In order to use a Spot Fleet you must specify a total Spot Fleet Size using the -st argument.")
+                sys.exit(0)
+            if str(ccOptionsParsed['spotFleetType']).lower() == "none":
+                print("In order to use a Spot Fleet you must specify a Spot Fleet type using the -ft argument.")
+                sys.exit(0)
 
 
 def validateInstanceParameters(ccOptionsParsed):
@@ -361,23 +548,25 @@ def validateInstanceParameters(ccOptionsParsed):
         if tempCPUs <= 0:
             print("Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n")
             sys.exit(0)
-    except:
+    except Exception:
         print("Invalid number of CPUs specified. The number of CPUs must be a valid integer greater than 0.\n")
         sys.exit(0)
+
     try:
         tempMemory = int(ccOptionsParsed["memoryRequested"])
         if tempMemory <= 0:
             print("Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n")
             sys.exit(0)
-    except:
+    except Exception:
         print("Invalid amount of Memory specified. The amount of Memory must be a valid integer greater than 0.\n")
         sys.exit(0)
+
     try:
         tempNumInstances = int(ccOptionsParsed["numberOfInstancesRequested"])
         if tempNumInstances <= 0:
             print("Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n")
             sys.exit(0)
-    except:
+    except Exception:
         print("Invalid number of requested instances. The amount of Instances Requested must be a valid integer greater than 0.\n")
         sys.exit(0)
 
@@ -386,18 +575,31 @@ def validateInstanceParameters(ccOptionsParsed):
         if tempcertLength < 0:
             print("Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n")
             sys.exit(0)
-    except:
+    except Exception:
         print("Invalid certificate valid length. The number of days valid must be a valid integer greater than or equal to 0.\n")
         sys.exit(0)
 
     if ccOptionsParsed["optimizationChoice"] != "cost" and ccOptionsParsed["optimizationChoice"] != "performance":
         print("Invalid optimization choice specified. The valid optimization choices are \"cost\" or \"performance\".\n")
         sys.exit(0)
+
     if ccOptionsParsed["criteriaPriority"] != "mcn" and ccOptionsParsed["criteriaPriority"] != "mnc" and ccOptionsParsed["criteriaPriority"] != "cmn" and ccOptionsParsed["criteriaPriority"] != "cnm" and ccOptionsParsed["criteriaPriority"] != "ncm" and ccOptionsParsed["criteriaPriority"] != "nmc":
         print("Invalid criteria priority specified. The valid criteria priority are: mcn, mnc, cmn, cnm, ncm, or nmc.\n")
         sys.exit(0)
+
     if ccOptionsParsed["networkTypeRequested"] != "low" and ccOptionsParsed["networkTypeRequested"] != "moderate" and ccOptionsParsed["networkTypeRequested"] != "high" and ccOptionsParsed["networkTypeRequested"] != "10 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "default" and ccOptionsParsed["networkTypeRequested"] != "20 Gigabit" and ccOptionsParsed["networkTypeRequested"] != "up to 10 gigabit":
         print("Invalid network type specified. The valid network types are: low, moderate, high, 10 Gigabit, or 20 Gigabit.\n")
+        sys.exit(0)
+
+
+def validateGeneralParameters(ccOptionsParsed):
+    try:
+        temp = int(ccOptionsParsed['maxIdle'])
+        if temp < 0:
+            print("The maximum idle time must be an positive integer. This integer represents the maximum amount of time that the instance will remain running in the idle state (without a job running).\n")
+            sys.exit(0)
+    except Exception:
+        print("The maximum idle time must be an positive integer. This integer represents the maximum amount of time that the instance will remain running in the idle state (without a job running).\n")
         sys.exit(0)
 
 
@@ -411,6 +613,28 @@ def generateJobMD5Hash(jobScriptText):
         return {"status": "success", "payload": {"md5": newJobScriptMD5Hash}}
     except Exception as e:
         return {"status": "error", "payload": "There was a problem while checking the job script. Please try again in a little bit."}
+
+
+def convertTimeLimitToSeconds(ccOptionsParsed):
+    timeLimit = ccOptionsParsed['timeLimit']
+    # Format of the timeLimit should be <days>:<hours>:<minutes>
+    # If no timeLimit is specified return None
+    if timeLimit == "None" or str(timeLimit).lower() == "unlimited":
+        return {"status": "success", "payload": {"timeLimit": timeLimit}}
+
+    # Check and make sure that they have the timeLimit specified in the correct format
+    try:
+        splitLimit = str(timeLimit).split(":")
+        if len(splitLimit) > 3:
+            return {"status": "error", "payload": "The timelimit specified is not in the proper format. Please ensure that the -tl argument is of the format <days>:<hours>:<minutes> where <days>, <hours>, <minutes> are integers greater than or to 0. You may also specify \"unlimited\" if you do not want the instances to terminate until you delete them."}
+        else:
+            days = int(splitLimit[0])
+            hours = int(splitLimit[1])
+            minutes = int(splitLimit[2])
+            timeLimit = (days * 86400) + (hours * 3600) + (minutes * 60)
+            return {"status": "success", "payload": {"timeLimit": timeLimit}}
+    except Exception as e:
+        return {"status": "error", "payload": "The timelimit specified is not in the proper format. Please ensure that the -tl argument is of the format <days>:<hours>:<minutes> where <days>, <hours>, <minutes> are integers greater than or to 0. You may also specify \"unlimited\" if you do not want the instances to terminate until you delete them."}
 
 
 def encodeString(k, field):
@@ -429,7 +653,8 @@ def extractFieldsFromCert():
         certObj = json.load(certFile)
         return {"status": "success", "payload": certObj}
 
-    except:
+    except Exception:
         return {"status": "error", "payload": "There was a problem parsing the ccq certificate."}
+
 
 ccqsub()

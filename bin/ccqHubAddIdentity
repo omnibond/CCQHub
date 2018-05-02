@@ -33,7 +33,7 @@ def main():
     # parser.add_argument('-tn', '--targetNames', help="A comma separated list of the target(s) that the identity can submit jobs to.", default=None)
 
     # The list of userNames associated with the Identity being created.
-    parser.add_argument('-un', '--userNames', help="The list of userNames that will be associated with the new identity. The format is a comma separated list. (ex: bob,sue)", default=None)
+    parser.add_argument('-un', '--userNames', help="The list of userNames that will be associated with the new identity. The format is a comma separated list. (ex: bob,sue)", default=None, required=True)
     parser.add_argument('-at', '--actions', help="The list of actions that the new identity will be able to perform. By default the Identity not allowed to perform any actions. The possible actions are: " + str(policies.getValidActions(True)) + ". The format is a comma separated list. (ex: admin,submit)", default=None)
     parser.add_argument('-gk', '--genKey', help="Generate an Identity App key after creating the identity. This key can then be used to perform actions on behalf of the user. The default is to generate a key.", default=True)
 
