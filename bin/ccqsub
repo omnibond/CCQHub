@@ -195,7 +195,7 @@ def ccqsub():
 
     storeTrueCommands = ["-sf", "-pr", "-cp"]
 
-    if ccAccessKey is None and remoteUserName != "default":
+    if ccAccessKey is None and remoteUserName is not None:
         print("\nThe remote username (-ru) argument can only be used in combination with the -i argument. Please either remove the -ru argument or provide an app key using the -i argument.")
         sys.exit(0)
 

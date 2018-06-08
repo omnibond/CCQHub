@@ -137,14 +137,14 @@ def ccqHubStat():
                             except Exception as e:
                                 # We couldn't connect to the url so we need to try the other one.
                                 badURL = True
-                                print ''.join(traceback.format_exc(e))
+                                print(''.join(traceback.format_exc(e)))
                             if not badURL:
                                 if res['status'] == "failure":
                                     if proxyKey is not None:
-                                        print "The key is not valid, please check your key and try again."
+                                        print("The key is not valid, please check your key and try again.")
                                 elif res['status'] == "error":
                                     #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-                                    print res['payload']['message'] + "\n\n"
+                                    print(res['payload']['message'] + "\n\n")
                                     return {"status": "error", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
                                 elif res['status'] == "success":
                                     submittedSuccessfully = True
@@ -157,7 +157,7 @@ def ccqHubStat():
                                         return {"status": "success", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
                 except Exception as e:
                     # We encountered an unexpected exception
-                    print ''.join(traceback.format_exc(e))
+                    print(''.join(traceback.format_exc(e)))
         return {"status": "error", "payload": {"message": "Unable to successfully get the status of the job(s) specified. Please re-check the credentials and try again.", "cert": str(cert)}}
 
     # If they don't want the verbose status, we just get the status out of the DB, format it and return it.
@@ -226,7 +226,7 @@ def ccqHubDel():
         if len(results) == 0:
             return {"status": "success", "payload": {"message": "The requested job id does not exist. Please check the job id and try again.", "cert": str(cert)}}
         for job in results:
-            print "JOB IS: " + str(job)
+            print("JOB IS: " + str(job))
             targetAddresses = json.loads(job["targetAddresses"])
             targetProxyKeys = json.loads(job["targetProxyKeys"])
             targetProtocol = job["targetProtocol"]
@@ -254,14 +254,14 @@ def ccqHubDel():
                                     except Exception as e:
                                         # We couldn't connect to the url so we need to try the other one.
                                         badURL = True
-                                        print ''.join(traceback.format_exc(e))
+                                        print(''.join(traceback.format_exc(e)))
                                     if not badURL:
                                         if res['status'] == "failure":
                                             if proxyKey is not None:
-                                                print "The key is not valid, please check your key and try again."
+                                                print("The key is not valid, please check your key and try again.")
                                         elif res['status'] == "error":
                                             #If we encounter an error NOT an auth failure then we exit since logging in again probably won't fix it
-                                            print res['payload']['message'] + "\n\n"
+                                            print(res['payload']['message'] + "\n\n")
                                             return {"status": "error", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
                                         elif res['status'] == "success":
                                             deletedSuccessfully = True
@@ -271,7 +271,7 @@ def ccqHubDel():
                                             return {"status": "success", "payload": {"message": res['payload']['message'], "cert": str(cert)}}
                         except Exception as e:
                             # We encountered an unexpected exception
-                            print ''.join(traceback.format_exc(e))
+                            print(''.join(traceback.format_exc(e)))
                 return {"status": "error", "payload": {"message": "Unable to successfully delete the job specified. Please re-check the credentials and try again.", "cert": str(cert)}}
             except Exception as e:
                 # The job has not yet been submitted to the remote scheduler by ccqHubHandler. We need to delete the job before it is processed.
@@ -331,7 +331,7 @@ def ccqHubSub():
 
 
 def validateCreds(userName, password, dateExpires, valKey, certLength, ccAccessKey, remoteUserName, additionalActionsAndPermissionsRequired):
-    print "Checking user Credentials!"
+    print("Checking user Credentials.")
     validUser = False
     cert = None
     identity = ""

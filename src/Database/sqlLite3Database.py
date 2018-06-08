@@ -41,7 +41,7 @@ class sqlLite3Database(Database):
         if action == "query":
             tableConnInfo = self.tableConnect(ccqHubVars.ccqHubLookupDBName)
             if tableConnInfo['status'] != "success":
-                print "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName)
+                print("Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName))
                 return {"status": "error", "payload": {"error": "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName), "traceback": traceback.format_stack()}}
             else:
                 tableConn = tableConnInfo['payload']
@@ -79,7 +79,7 @@ class sqlLite3Database(Database):
                     # Now we have a list of the objectIds that we want so we need to get the actual object out of the object table
                     tableConnInfo = self.tableConnect(ccqHubVars.ccqHubObjectDBName)
                     if tableConnInfo['status'] != "success":
-                        print "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName)
+                        print("Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName))
                         return {"status": "error", "payload": {"error": "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName), "traceback": traceback.format_stack()}}
                     else:
                         tableConn = tableConnInfo['payload']
@@ -108,14 +108,14 @@ class sqlLite3Database(Database):
 
                                 returnArr.append(item)
                             except Exception as e:
-                                print "Encountered an exception: " + str(traceback.format_exc(e))
+                                print("Encountered an exception: " + str(traceback.format_exc(e)))
                                 pass
                         tableConn.close()
 
         elif action == "get":
             tableConnInfo = self.tableConnect(ccqHubVars.ccqHubObjectDBName)
             if tableConnInfo['status'] != "success":
-                print "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName)
+                print("Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName))
             else:
                 tableConn = tableConnInfo['payload']
                 tableConn.row_factory = self.returnDict
@@ -149,10 +149,10 @@ class sqlLite3Database(Database):
         lookupTableConnInfo = self.tableConnect(ccqHubVars.ccqHubLookupDBName)
         objectTableConnInfo = self.tableConnect(ccqHubVars.ccqHubObjectDBName)
         if lookupTableConnInfo['status'] != "success":
-            print "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName)
+            print("Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName))
             return {"status": "error", "payload": {"error": "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubLookupDBName), "traceback": traceback.format_stack()}}
         elif objectTableConnInfo['status'] != "success":
-            print "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName)
+            print("Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName))
             return {"status": "error", "payload": {"error": "Unable to successfully connect to the table " + str(ccqHubVars.ccqHubObjectDBName), "traceback": traceback.format_stack()}}
         else:
             lookupTableConn = lookupTableConnInfo['payload']
@@ -194,8 +194,8 @@ class sqlLite3Database(Database):
                 deleteIndexStatus = self.deleteIndexes(baseObj, lookupTableConn)
                 deleteObjectStatus = self.deleteObj(obj, objectTableConn)
                 if deleteIndexStatus['status'] != "success":
-                    print "Problem deleting the old object's indexes during the handleObj modify operation"
-                    print deleteIndexStatus['payload']
+                    print("Problem deleting the old object's indexes during the handleObj modify operation")
+                    print(deleteIndexStatus['payload'])
                 if deleteObjectStatus['status'] != "success":
                     print "Problem deleting the old object during the handleObj modify operation"
                     print deleteObjectStatus['payload']

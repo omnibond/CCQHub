@@ -141,7 +141,7 @@ def evaluatePermissions(subject, actions):
                             return {"status": "failure", "payload": "The identity is not authorized to perform the requested action(s)."}
                 if typeOfSubject == "userName":
                     #TODO need to check and see if the userName belongs to the identity
-                    print "Work In Progress"
+                    print("Work In Progress")
             except Exception as e:
                 return {"status": "failure", "payload": "Unable to validate the provided key.\n" + str(''.join(traceback.format_exc(e)))}
 
@@ -229,7 +229,7 @@ def validateAppKey(ccAccessKey, remoteUserName, additionalActionsAndPermissionsR
                 for additionalAction in additionalActionsAndPermissionsRequired:
                     subject = {"subjectType": "key", "subject": str(ccAccessKey), "subjectRecType": "Identity"}
                     results = evaluatePermissions(subject, additionalActionsAndPermissionsRequired[additionalAction])
-                    print results
+                    print(results)
                     if results['status'] != "success":
                         return {"status": "failure", "payload": results['payload']}
 
@@ -290,7 +290,7 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
                     if remoteUserName is None and userName is None:
                         values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
                         if values['status'] != "success":
-                            print values['payload']
+                            print(values['payload'])
                             sys.exit(0)
                         else:
                             promptRemoteUserName = values['payload']
@@ -316,7 +316,7 @@ def validateJobAuthParameters(userName, password, appKeyLocation, remoteUserName
                     if remoteUserName is None:
                         values = ccqHubVars.retrieveSpecificConfigFileKey("General", "promptRemoteUserName")
                         if values['status'] != "success":
-                            print values['payload']
+                            print(values['payload'])
                             sys.exit(0)
                         else:
                             promptRemoteUserName = values['payload']

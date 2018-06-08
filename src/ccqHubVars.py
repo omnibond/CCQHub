@@ -82,12 +82,12 @@ def init():
                             backedUpObjects = json.load(ccqFile)
                             jobMappings = backedUpObjects['jobMappings']
                     except Exception as e:
-                        print "There was no backup file found, it was either deleted or this is the first time ccqHub has been run."
+                        print("There was no backup file found, it was either deleted or this is the first time ccqHub has been run.")
                         jobMappings = {}
                 else:
                     jobMappings = {}
             except Exception as e:
-                print "ERROR" + str(e)
+                print("ERROR" + ''.join(traceback.format_exc()))
                 # There was an issue getting the database information out of the DB
                 ccqHubLookupDBName = None
                 ccqHubObjectDBName = None
@@ -101,8 +101,8 @@ def init():
                 jobsTransferringOutput = []
 
         except Exception as e:
-            print traceback.format_exc(e)
-            print "Unable to read ccqHub configuration file, the file may have been removed or corrupted."
+            print(traceback.format_exc(e))
+            print("Unable to read ccqHub configuration file, the file may have been removed or corrupted.")
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
             ccqHubPrefix = None
@@ -125,6 +125,7 @@ def init():
         jobMappings = None
         ccqHubVarFileBackup = None
         jobsTransferringOutput = []
+
 
 def initInstaller(prefix):
     global ccqHubConfigFileLocation
@@ -159,8 +160,8 @@ def initInstaller(prefix):
                 jobsTransferringOutput = []
 
         except Exception as e:
-            print traceback.format_exc(e)
-            print "Unable to read ccqHub configuration file, the file may have been removed or corrupted."
+            print(traceback.format_exc(e))
+            print("Unable to read ccqHub configuration file, the file may have been removed or corrupted.")
             ccqHubLookupDBName = None
             ccqHubObjectDBName = None
             ccqHubPrefix = None

@@ -126,7 +126,7 @@ def cloudJobSubmission(jobObj, logger):
                         try:
                             req = urllib2.Request(url, data, headers)
                             res = urllib2.urlopen(req).read().decode('utf-8')
-                            print res
+                            print(res)
                             res = json.loads(res)
                         except Exception as e:
                             # We couldn't connect to the url so we need to try the other one.
@@ -681,7 +681,7 @@ def main():
         prefix = sys.argv[1] + "/logs/"
         #Set the global variables that ccq will use throughout its operation
         ccqHubVars.init()
-        print "Successfully initialized the global variables for ccq."
+        print("Successfully initialized the global variables for ccq.")
 
         #Set the locks for the threads to ensure data integrity and to ensure multiple threads do not write to the same ccq variable or ccq status file at once
         ccqHubVars.ccqHubVarLock = threading.RLock()
@@ -709,20 +709,20 @@ def main():
         while True:
             time.sleep(120)
             if not ccqDelegateTasksThread.is_alive:
-                print "UHOH WE DIED AT SOME POINT"
+                print("UHOH WE DIED AT SOME POINT")
                 ccqDelegateTasksThread.start()
             else:
-                print "The ccqDelegateTasksThread is running."
+                print("The ccqDelegateTasksThread is running.")
 
             if not cloudJobMonitorThread.is_alive:
-                print "UHOH WE DIED AT SOME POINT"
+                print("UHOH WE DIED AT SOME POINT")
                 cloudJobMonitorThread.start()
             else:
-                print "The cloudJobMonitorThread is running."
+                print("The cloudJobMonitorThread is running.")
 
             if not localJobMonitorThread.is_alive:
-                print "UHOH WE DIED AT SOME POINT"
+                print("UHOH WE DIED AT SOME POINT")
                 localJobMonitorThread.start()
             else:
-                print "The localJobMonitorThread is running."
+                print("The localJobMonitorThread is running.")
 main()

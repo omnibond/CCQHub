@@ -47,7 +47,7 @@ if ccqHubVars.ccqHubDBLock is None:
 if ccqHubVars.databaseType is None or ccqHubVars.databaseType == "sqlite3":
     dbInterface = sqlLite3Database()
 else:
-    print "Database type not supported at this time."
+    print("Database type not supported at this time.")
     sys.exit(0)
 
 ccqHubKeyDir = "/.keys"
@@ -125,7 +125,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
                 results = results['payload']
             else:
                 #Need to update the job status here and somehow notify the user the job has failed
-                print "Error: QueryErrorException! Unable to get Item!"
+                print("Error: QueryErrorException! Unable to get Item!")
                 return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
             for job in results:
                 if fieldsToAddToJob is not None and job['status'] != "Deleting":
@@ -143,7 +143,7 @@ def updateJobInDB(fieldsToAddToJob, jobId):
             elif quit:
                 return {"status": "deleting", "payload": "This job has been deleted by the user and should stop execution and all scaling activities!"}
         except Exception as e:
-            print traceback.format_exc(e)
+            print(traceback.format_exc(e))
             if timeElapsed >= maxTimeToWait:
                 return {"status": "error", "payload": "Failed to save out job status!"}
             time.sleep(timeToWait)
@@ -163,7 +163,8 @@ def calculateAvgRunTimeAndUpdateDB(startTime, endTime, instanceType, jobName):
                 results = results['payload']
             else:
                 #Need to update the job status here and somehow notify the user the job has failed
-                print "Error: QueryErrorException! Unable to get Item!"
+                print(results['payload']['error'])
+                print(results['payload']['traceback'])
                 return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
             for jobScript in results:
                 runTimes = jobScript['runTimes']
@@ -207,8 +208,8 @@ def appendSuffixToJobScriptName(jobName):
     if items['status'] == "success":
         items = items['payload']
     else:
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+        print(items['payload'])
+        return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
     count = 0
     for jobScript in items:
@@ -234,7 +235,7 @@ def compareJobScriptsMD5s(jobName, newJobMD5):
     if items['status'] == "success":
         items = items['payload']
     else:
-        print items['payload']
+        print(items['payload'])
         return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
     for jobScript in items:
@@ -253,8 +254,8 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         if items['status'] == "success":
             items = items['payload']
         else:
-            print "Error: QueryErrorException! Unable to get Item."
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item."}
+            print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+            return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
         for jobScript in items:
             if jobScript['name'] == parameter:
@@ -266,8 +267,8 @@ def checkUniqueness(typeToCompare, parameter, jobName=None):
         if items['status'] == "success":
             items = items['payload']
         else:
-            print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': items['payload']}
+            print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+            return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
         for jobId in items:
             if jobId['name'] == parameter or jobId['jobName'] == jobName:
@@ -376,20 +377,20 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
                 if items['status'] == "success":
                     items = items['payload']
                 else:
-                    print "Error: QueryErrorException! Unable to get Item."
-                    return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item."}
+                    print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+                    return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
                 for jobScript in items:
                     jobScript['numberOfTimesRun'] = int(jobScript['numberOfTimesRun'])+1
                     obj = {'action': "modify", "obj": jobScript}
                     response = dbInterface.handleObj(**obj)
                     if response['status'] != "success":
-                        print response['payload']['error']
-                        print response['payload']['traceback']
+                        print(response['payload']['error'])
+                        print(response['payload']['traceback'])
                         return {"status": "error", "payload": {str(response['payload']['error'])}}
                 done = True
             except Exception as e:
-                print traceback.format_exc(e)
+                print(traceback.format_exc(e))
                 if timeElapsed >= maxTimeToWait:
                     return {"status": "error", "payload": "Failed to update number of times the job has run."}
                 time.sleep(timeToWait)
@@ -397,8 +398,8 @@ def saveJob(jobScriptLocation, jobScriptText, ccOptionsParsed, jobName, userName
 
         return {"status": "success", "payload": {"jobId": str(generatedJobId)}}
     else:
-        print response['payload']['error']
-        print response['payload']['traceback']
+        print(response['payload']['error'])
+        print(response['payload']['traceback'])
         return {"status": "error", "payload": {str(response['payload']['error'])}}
 
 
@@ -415,8 +416,8 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
         if items['status'] == "success":
             items = items['payload']
         else:
-            print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+            print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+            return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
         for scheduler in items:
             schedulerIpAddress = scheduler['instanceIP']
@@ -438,8 +439,8 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
             res = urllib2.urlopen(req).read().decode('utf-8')
             return {"status": "success", "payload": res}
         except Exception as ex:
-            print str(ex)
-            return {"status": "error", "payload": "There was an error trying to get the status of the jobs running on the Scheduler " + str(schedName) + "! " + str(ex)}
+            print(''.join(traceback.format_exc()))
+            return {"status": "error", "payload": "There was an error trying to get the status of the jobs running on the Scheduler " + str(schedName) + "! " + ''.join(traceback.format_exc())}
 
     # We will have to validate the user/password/key at some point however the way it is currently done isn't going to work
     # Probably going to have to go hit the server and try and auth things that way kinda like how ccq in the cloud works
@@ -497,7 +498,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
             res = urllib2.urlopen(req).read().decode('utf-8')
             return {"status": "success", "payload": res}
         except Exception as ex:
-            print str(ex)
+            print(''.join(traceback.format_exc()))
             return {"status": "error", "payload": "There ways an error trying to get the status job! " + str(ex)}
     else:
         return {"status": "partial-failure", "payload": "There was an error encountered trying to get the verbose information from the scheduler! The job you requested information on is running on a Cluster that is not the one you are currently using!\n"
@@ -563,7 +564,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
             res = urllib2.urlopen(req).read().decode('utf-8')
             return {"status": "success", "payload": str(res)}
         except Exception as ex:
-            print str(ex)
+            print(''.join(traceback.format_exc()))
             return {"status": "error", "payload": "There was an error trying to delete job! " + str(ex)}
     else:
         return {"status": "partial-failure", "payload": "There was an error encountered trying to delete the job! The job you want to delete on is running on a Cluster that is not the one you are currently using!\n"}
@@ -575,8 +576,8 @@ def getSchedulerAndSchedTypeFromJob(jobId):
         results = results['payload']
     else:
         #Need to update the job status here and somehow notify the user the job has failed
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+        print(str(results['payload']['error']) + ". Traceback: " + str(results['payload']['traceback']))
+        return {'status': 'error', 'payload': str(results['payload']['error']) + ". Traceback: " + str(results['payload']['traceback'])}
     for job in results:
         try:
             schedulerToUse = job['schedulerToUse']
@@ -602,8 +603,8 @@ def getSchedulerIpByName(schedName):
         if items['status'] == "success":
             items = items['payload']
         else:
-            print "Error: QueryErrorException! Unable to get Item!"
-            return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+            print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+            return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
         for scheduler in items:
             if scheduler['defaultScheduler'] == "true":
@@ -615,8 +616,8 @@ def getSchedulerIpByName(schedName):
     if items['status'] == "success":
         items = items['payload']
     else:
-        print "Error: QueryErrorException! Unable to get Item!"
-        return {'status': 'error', 'payload': "Error: QueryErrorException! Unable to get Item!"}
+        print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+        return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
     for scheduler in items:
         return {"status": "success", "payload": {"schedulerIpAddress": str(scheduler['instanceIP'])}}
@@ -677,12 +678,12 @@ def calculatePriceForJob(instanceType, numberOfInstances, instanceVolumeSize, in
             return {"status": "success", "payload": totalPrice}
 
         except Exception as e:
-            print "There was an error trying to determine the cost of the job!"
-            print traceback.print_exc(e)
+            print("There was an error trying to determine the cost of the job!")
+            print(''.join(traceback.print_exc(e)))
             return {"status": "error", "payload": {"error": "There was a problem trying to calculate the cost of the job!", "traceback": str(traceback.format_exc(e))}}
 
     except ImportError as e:
-        print "Unable to determine price! Not running on a CC instance!"
+        print("Unable to determine price! Not running on a CC instance!")
         return {"status": "error", "payload": {"error": "Unable to calculate pricing for the job! CCQ not running on a CC instance!", "traceback": str(traceback.format_exc(e))}}
 
 
@@ -708,10 +709,10 @@ def getInput(fieldName, description, possibleValues, exampleValues):
             if str(temp).lower() in possibleValues:
                 done = True
             else:
-                print "Invalid selection.\n"
+                print("Invalid selection.\n")
                 inputPrompt = "Please select a value from the list: " + tempString
         if not done:
-            print "Maximum number of input tries reached, please try again."
+            print("Maximum number of input tries reached, please try again.")
             sys.exit(0)
         else:
             return temp
@@ -1000,7 +1001,7 @@ def getTargetInformation(targetName, schedulerType):
     if items['status'] == "success":
         items = items['payload']
     else:
-        print items['payload']
+        print(items['payload'])
         return {'status': 'error', 'payload': items['payload']}
 
     for target in items:
@@ -1017,8 +1018,8 @@ def checkCloudSchedulerTypes(targetName, requestedSchedulerType):
     if items['status'] == "success":
         items = items['payload']
     else:
-        print items['payload']
-        return {'status': 'error', 'payload': items['payload']}
+        print(str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback']))
+        return {'status': 'error', 'payload': str(items['payload']['error']) + ". Traceback: " + str(items['payload']['traceback'])}
 
     for target in items:
         try:
@@ -1158,7 +1159,7 @@ def generateEncryptionKey():
             status, output = commands.getstatusoutput("mkdir " + str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyDir))
             if int(status) != 0:
                 # Creation of the directory failed print the output and exit
-                print "There was an error trying to create the ccqHub key directory. The error message is: " + str(output)
+                print("There was an error trying to create the ccqHub key directory. The error message is: " + str(output))
                 sys.exit(0)
 
         try:
@@ -1170,7 +1171,7 @@ def generateEncryptionKey():
             status, output = commands.getstatusoutput("chmod -R 400 " + str(ccqHubVars.ccqHubPrefix) + str(ccqHubKeyDir))
             if int(status) != 0:
                 # Creation of the directory failed print the output and exit
-                print "There was an error trying to create the ccqHub key directory. The error message is: " + str(output)
+                print("There was an error trying to create the ccqHub key directory. The error message is: " + str(output))
                 sys.exit(0)
 
         except Exception as e:
