@@ -22,6 +22,7 @@ actionsAndRequiredAttributes = {"ccqHubAdmin": {"groups": [], "attributes": {"cc
                                 "submitJob": {"groups": [], "attributes": {"submitJob": "True"}}
                                }
 
+
 def getValidActionsAndRequiredAttributes():
     return actionsAndRequiredAttributes
 

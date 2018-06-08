@@ -15,18 +15,12 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 import os
-import sys
 import commands
-import urllib2
+import traceback
+import logging
 
 from Scheduler import Scheduler
-
-import ccqHubMethods
-
-import math
-import traceback
-import time
-import logging
+import src.ccqHubMethods as ccqHubMethods
 
 #logFileDirectory = "/var/logs/CCQHub"
 

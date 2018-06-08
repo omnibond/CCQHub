@@ -15,19 +15,9 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-import sys
-import time
-import urllib2
-
-import math
-
 from Scheduler import Scheduler
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import ccqHubMethods
-import traceback
-import time
+import src.ccqHubMethods as ccqHubMethods
 import commands
 
 

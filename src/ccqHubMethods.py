@@ -17,28 +17,21 @@
 import base64
 import commands
 import os
-import socket
 import sys
 import time
 import traceback
 import urllib2
 import json
 from random import randint
-import datetime
 from datetime import timedelta
-import ccqHubVars
 import policies
 import threading
 import ConfigParser
 
-# sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
-# from Slurm import SlurmScheduler
-# from Torque import TorqueScheduler
-# from Condor import CondorScheduler
-# from Openlava import OpenlavaScheduler
-
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Database"))
-from sqlLite3Database import sqlLite3Database
+import ccqHubVars
+from Database.sqlLite3Database import sqlLite3Database
+#from Schedulers.Slurm import SlurmScheduler
+#from Schedulers.Torque import TorqueScheduler
 
 ccqHubVars.init()
 if ccqHubVars.ccqHubDBLock is None:

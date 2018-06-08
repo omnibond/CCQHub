@@ -15,26 +15,19 @@
 import os
 import sys
 import time
-
-from ccqHubMethods import writeCcqVarsToFile
-
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
-from Slurm import SlurmScheduler
-from Torque import TorqueScheduler
-
 import urllib2
 import json
 import traceback
-import commands
-from datetime import datetime
-from datetime import timedelta
-import platform
-import ccqHubMethods
 import threading
-import ccqHubVars
 import paramiko
 import credentials
 import logging
+
+from ccqHubMethods import writeCcqVarsToFile
+from Schedulers.Torque import TorqueScheduler
+from Schedulers.Slurm import SlurmScheduler
+import ccqHubMethods
+import ccqHubVars
 
 tempJobScriptLocation = ""#ClusterMethods.tempScriptJobLocation
 tempJobOutputLocation = ""#ClusterMethods.tempJobOutputLocation

@@ -17,11 +17,9 @@ import argparse
 import sys
 import traceback
 import json
-import os
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
 
 
 def formatOutput(listOfTargets, targetAddressInput):
@@ -143,10 +141,10 @@ def main():
                 results = response['payload']
                 print(formatOutput(results, targetAddress))
 
-
     except Exception as e:
         print("ccqHubListTargets encountered an unexpected exception.")
         print(traceback.format_exc(e))
         sys.exit(0)
+
 
 main()

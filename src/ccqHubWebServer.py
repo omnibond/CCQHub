@@ -1,9 +1,6 @@
 from bottle import run
 import argparse
 
-import appImports
-import logging
-
 parser = argparse.ArgumentParser(description="Runs the ccqHub webserver that accepts requests for job submission.")
 parser.add_argument('-V', '--version', action='version', version='ccqHubWebServer (version 0.1)')
 parser.add_argument('-ht', '--host', help="The IP address that ccqHub is going to listen on. By default this is set to localhost. For AWS based installations of ccqHub the IP address needs to be 0.0.0.0 if ccqHub is to use the DNS name/public IP address for your instance.", default="localhost")

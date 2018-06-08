@@ -16,12 +16,9 @@
 import argparse
 import sys
 import traceback
-import uuid
-import os
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
 
 
 def main():
@@ -119,4 +116,6 @@ def main():
         print("ccqHubListIdentities encountered an unexpected error.")
         print(traceback.format_exc(e))
 
+
 main()
+

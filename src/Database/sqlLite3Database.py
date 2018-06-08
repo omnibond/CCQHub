@@ -17,15 +17,12 @@
 # along with CCQHub.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
-import os
 import sqlite3
-import sys
 import traceback
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import ccqHubVars
-import compoundIndexDefinition
-from DatabaseBaseClass import Database
+import src.ccqHubVars as ccqHubVars
+import src.compoundIndexDefinition as compoundIndexDefinition
+import DatabaseBaseClass as Database
 
 
 class sqlLite3Database(Database):

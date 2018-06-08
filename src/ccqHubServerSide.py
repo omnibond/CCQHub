@@ -15,27 +15,17 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
 
-import base64
-from random import randint
-
-from bottle import request, route, get, post, error
-import time
-import sys
-import os
-
-# sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/Schedulers"))
-# from Slurm import SlurmScheduler
-# from Torque import TorqueScheduler
-# from Condor import CondorScheduler
-# from Openlava import OpenlavaScheduler
-
-import argparse
+from bottle import request, route
 import urllib2
 import json
 import traceback
+
 import ccqHubVars
 import ccqHubMethods
 import credentials
+#from Schedulers.Slurm import SlurmScheduler
+#from Schedulers.Torque import TorqueScheduler
+
 
 #tempJobScriptLocation = ClusterMethods.tempScriptJobLocation
 #tempJobOutputLocation = ClusterMethods.tempJobOutputLocation

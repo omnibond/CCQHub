@@ -16,12 +16,9 @@
 import argparse
 import sys
 import traceback
-import uuid
-import os
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
 
 
 def loopAndDelete(listToLoopThrough, listType):
@@ -47,6 +44,7 @@ def loopAndDelete(listToLoopThrough, listType):
                 else:
                     print("Successfully deleted the Identity with the attribute " + str(item) + " from ccqHub.")
 
+
 def main():
     parser = argparse.ArgumentParser(description="A ccqHub utility that allows an administrator to delete an identity from ccqHub.")
     parser.add_argument('-V', '--version', action='version', version='ccqHubDeleteIdentity (version 0.1)')
@@ -60,8 +58,6 @@ def main():
 
     # The keyId of a key associated with the Identity to be deleted.
     parser.add_argument('-ki', '--keyId', help="The keyId of a key associated with the Identity to be deleted.This argument can be a comma separated list for deleting multiple Identities at a time. (ex: 09cc09,f1dab4)", default=None)
-
-
 
     args = parser.parse_args()
 
@@ -108,5 +104,6 @@ def main():
     except Exception as e:
         print("ccqHubDeleteIdentity encountered an unexpected error.")
         print(traceback.format_exc(e))
+
 
 main()

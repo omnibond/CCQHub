@@ -22,20 +22,16 @@ import urllib2
 import sys
 import json
 import hashlib
-import getpass
-from datetime import date, datetime
 import commands
-import getpass
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
-import ccqHubVars
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
 ccqConfigFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.config")
 ccqLogFileLocation = str(os.path.expanduser('~')) + str("/ccqHub.log")
+
 
 def ccqsub():
     #TODO Change the wording of this to make sure it is actually referring to ccqHub not ccq in the Cloud

@@ -20,14 +20,10 @@ import sys
 import json
 import traceback
 import urllib2
-import getpass
 import os
-from datetime import datetime
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
-import ccqHubVars
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
 
 ccqCertDefaultFileLocation = str(os.path.expanduser('~')) + str("/ccqHubCert.cert")
 ccqConfigFileLocationDefault = str(os.path.expanduser('/etc/')) + str("/ccqHub.config")
@@ -211,5 +207,6 @@ def extractFieldsFromCert():
         return {"status": "success", "payload": certObj}
     except Exception as e:
         return {"status": "error", "payload": "There was a problem parsing the ccq certificate."}
+
 
 ccqstat()

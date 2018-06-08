@@ -19,11 +19,11 @@ import json
 import os
 import sys
 import policies
-import ccqHubMethods
 import traceback
 import getpass
-import ccqHubVars
 
+import ccqHubVars
+import ccqHubMethods
 
 def checkAdminRights():
     import ctypes

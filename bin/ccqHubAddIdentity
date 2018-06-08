@@ -16,13 +16,12 @@
 import argparse
 import sys
 import traceback
-import uuid
 import os
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+str("/../src"))
-import ccqHubMethods
-import credentials
-import policies
+import src.ccqHubMethods as ccqHubMethods
+import src.credentials as credentials
+import src.policies as policies
+
 
 def main():
     parser = argparse.ArgumentParser(description="A ccqHub utility that allows an administrator to add a new identity to ccqHub.")
@@ -136,5 +135,6 @@ def main():
         print("ccqHubAddIdentity encountered an unexpected error.")
         print(traceback.format_exc(e))
         sys.exit(0)
+
 
 main()
