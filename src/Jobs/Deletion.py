@@ -14,3 +14,21 @@
 
 # You should have received a copy of the GNU Lesser General Public License
 # along with OpenCCQ.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import src.ccqHubMethods as ccqHubMethods
+import src.ccqHubVars as ccqHubVars
+import src.credentials as credentials
+
+
+class Deletion:
+    def __init__(self):
+        ccqHubVars.init()
+        pass
+
+    def cleanupDeletedJob(self, jobId, logger):
+        #Need to remove the job from all the ccqVarObjects so that we don't assign any instances to it
+        logger.info("SOMEHOW MADE IT INTO CLEANUPDELETEDJOB FUNCTION!!!!\n\n\n\n\n")
+        with ccqHubVars.ccqHubVarLock:
+            ccqHubVars.jobMappings.pop(jobId)
+        ccqHubMethods.writeCcqVarsToFile()

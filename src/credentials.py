@@ -25,6 +25,7 @@ import getpass
 import ccqHubVars
 import ccqHubMethods
 
+
 def checkAdminRights():
     import ctypes
 

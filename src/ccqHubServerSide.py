@@ -27,10 +27,6 @@ import credentials
 #from Schedulers.Torque import TorqueScheduler
 
 
-#tempJobScriptLocation = ClusterMethods.tempScriptJobLocation
-#tempJobOutputLocation = ClusterMethods.tempJobOutputLocation
-
-
 @route('/ccqHubStat', method='POST')
 def ccqHubStat():
     VARS = request.json

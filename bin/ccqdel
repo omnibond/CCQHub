@@ -150,7 +150,7 @@ def extractFieldsFromCert():
         certFile = open(ccqCertDefaultFileLocation, "r")
         certObj = json.load(certFile)
         return {"status": "success", "payload": certObj}
-    except:
+    except Exception as e:
         return {"status": "error", "payload": "There was a problem parsing the ccq certificate."}
 
 

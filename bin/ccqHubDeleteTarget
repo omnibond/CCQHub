@@ -72,15 +72,15 @@ def main():
                             response = ccqHubMethods.queryObj(None, "DefaultTargets", "get", "json")
                             if response['status'] == "success":
                                 results = response['payload']
-                                for item in results:
+                                for thing in results:
                                     # We need to check to see if the Target being deleted was a default Target and if so remove it from the default Target list
                                     results = response['payload']
                                     for defaultSched in results:
                                         defaultSchedulers = json.loads(defaultSched['defaultSchedulers'])
                                         if defaultSchedulers[schedType] == str(targetName):
                                             defaultSchedulers[schedType] = "None"
-                                            item['defaultSchedulers'] = defaultSchedulers
-                                            res = ccqHubMethods.handleObj("modify", item)
+                                            thing['defaultSchedulers'] = defaultSchedulers
+                                            res = ccqHubMethods.handleObj("modify", thing)
                                             if res['status'] != "success":
                                                 print("There was an error encountered when trying to update the DefaultTargets.\n")
                                                 print(res['payload'])

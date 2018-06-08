@@ -195,7 +195,7 @@ def ccqsub():
         print("\nThe remote username (-ru) argument can only be used in combination with the -i argument. Please either remove the -ru argument or provide an app key using the -i argument.")
         sys.exit(0)
 
-    # Get list of options that were specified via the commandline so that they are not overriden by the parameters in the script.
+    # Get list of options that were specified via the commandline so that they are not overridden by the parameters in the script.
     options = parser._actions
     temp = vars(args)
     specifiedViaCommandLine = []

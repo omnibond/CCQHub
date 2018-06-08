@@ -75,13 +75,13 @@ def main():
     if attributesToDelete is not None:
         for attr in attributesToDelete.replace(" ", "").split(","):
             if attr not in validActions:
-                print("Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + ".")
+                print("Invalid action specified. Please choose from the following actions: " + str(policies.getValidActions(True)) + ".")
                 sys.exit(0)
 
     if attributesToAdd is not None:
         for attr in attributesToAdd.replace(" ", "").split(","):
             if attr not in validActions:
-                print("Invalid action specified. Please choose from the following actions: "+ str(policies.getValidActions(True)) + ".")
+                print("Invalid action specified. Please choose from the following actions: " + str(policies.getValidActions(True)) + ".")
                 sys.exit(0)
 
     try:

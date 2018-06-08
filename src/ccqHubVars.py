@@ -46,6 +46,11 @@ global jobsTransferringOutput
 global ccqHubVarFileBackup
 
 
+tempJobScriptLocation = ""#ClusterMethods.tempScriptJobLocation
+tempJobOutputLocation = ""#ClusterMethods.tempJobOutputLocation
+logDirectory = ""#ClusterMethods.logFileDirectory
+
+
 def init():
     global ccqHubConfigFileLocation
     global ccqHubDBLock

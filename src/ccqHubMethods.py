@@ -29,7 +29,7 @@ import threading
 import ConfigParser
 
 import ccqHubVars
-from Database.sqlLite3Database import sqlLite3Database
+from Databases.sqlLite3Database import sqlLite3Database
 #from Schedulers.Slurm import SlurmScheduler
 #from Schedulers.Torque import TorqueScheduler
 
@@ -216,7 +216,7 @@ def appendSuffixToJobScriptName(jobName):
                 pass
             else:
                 jobName += str(temp[x])
-    except:
+    except Exception as e:
         jobName = str(jobName)+str(count)
 
     return {"status": "success", "payload": {"jobName": jobName}}
@@ -299,8 +299,7 @@ def saveJobScript(jobScriptLocation, jobScriptText, ccOptionsCommandLine, jobNam
 
 
 def putJobScriptInDB(jobScriptLocation, jobScriptText, jobName, ccOptionsParsed, jobMD5Hash, userName, targetName, identity):
-    obj = {}
-    obj['action'] = "create"
+    obj = {'action': "create"}
     data = {'name': str(jobName), 'RecType': 'JobScript', 'schedType': str(ccOptionsParsed['schedType']), 'jobScriptText': str(jobScriptText),
             'jobScriptLocation': str(jobScriptLocation), "dateFirstSubmitted": str(time.time()), "runTimes": {}, "numberOfTimesRun": str("0"), "createdByUser": str(userName), "jobMD5Hash": str(jobMD5Hash), "identity": str(identity), "targetName": str(targetName), "ccOptionsParsed": ccOptionsParsed}
     # for command in ccOptionsParsed:
@@ -448,7 +447,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
     #         jobInformation = values['payload']['jobInformation']
 
     #TODO we are going to have to go out to the other scheduler/db to get the information about the job
-    jobInformation ={}
+    jobInformation = {}
 
     schedulerToUse = jobInformation['schedulerUsed']
     schedType = jobInformation['schedType']
@@ -482,7 +481,7 @@ def getStatusFromScheduler(jobId, userName, password, verbose, instanceId, isCer
         try:
             jobInformation['schedulerJobName']
             final = {"jobId": str(jobId), "userName": str(userName), "password": str(password), "verbose": verbose, "instanceId": instanceId, "jobNameInScheduler": jobInformation['schedulerJobName'], "schedulerName": schedName, "isCert": str(isCert), 'schedulerType': schedType, 'schedulerInstanceId': schedulerInstanceId, 'schedulerInstanceName': schedulerInstanceName, 'schedulerInstanceIp': schedulerIpAddress}
-        except:
+        except Exception as e:
             final = {"jobId": str(jobId), "userName": str(userName), "password": str(password), "verbose": verbose, "instanceId": instanceId, "jobNameInScheduler": None, "schedulerName": schedName, "isCert": str(isCert), 'schedulerType': schedType, 'schedulerInstanceId': schedulerInstanceId, 'schedulerInstanceName': schedulerInstanceName, 'schedulerInstanceIp': schedulerIpAddress}
         data = json.dumps(final)
         headers = {'Content-Type': "application/json"}
@@ -547,7 +546,7 @@ def deleteJobFromScheduler(jobId, userName, password, instanceId, jobForceDelete
         try:
             jobInformation['schedulerJobName']
             final = {"jobId": str(jobId), "userName": str(userName), "password": str(password), "instanceId": instanceId, "jobNameInScheduler": jobInformation['schedulerJobName'], "jobForceDelete": jobForceDelete, "isCert": str(isCert), 'schedulerType': schedType, 'schedulerInstanceId': schedulerInstanceId, 'schedulerInstanceName': schedulerInstanceName, 'schedulerInstanceIp': schedulerIpAddress}
-        except:
+        except Exception as e:
             values = updateJobInDB({"status": "Deleting"}, jobId)
             return {"status": "success", "payload": "The job that you wanted to delete is currently in the process of being deleted!"}
         data = json.dumps(final)
@@ -584,7 +583,7 @@ def getSchedulerAndSchedTypeFromJob(jobId):
                 return {"status": "success", "payload": str(schedulerIpAddress)}
             else:
                 return {"status": "error", "payload": str(schedulerIpInfo['payload'])}
-        except:
+        except Exception as e:
             return {'status': 'error', 'payload': "Unable to get scheduler information via the Job entry in the DB!"}
 
     return {"status": "error", "payload": "The job Id requested does not exist in the Database!"}

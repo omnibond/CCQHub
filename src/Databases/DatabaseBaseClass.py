@@ -17,7 +17,10 @@
 import uuid
 
 
-class Database():
+class Database:
+
+    def __init__(self):
+        pass
 
     def generateTableNames(self):
         ccqHubUuid = str(uuid.uuid4().get_hex().upper()[0:6])
